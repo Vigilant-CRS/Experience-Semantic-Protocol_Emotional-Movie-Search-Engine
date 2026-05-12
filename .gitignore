@@ -1,8 +1,12 @@
 # Secrets — MUST NEVER be committed
 .env
-.env.*
+.env.local
+.env.production
+.env.dev
 *.pem
 *.key
+# but DO commit the documented template
+!.env.example
 
 # Python
 __pycache__/
