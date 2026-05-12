@@ -1,0 +1,27 @@
+# Same exclusions as .gitignore + dev/cache artifacts
+.git
+.gitignore
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.cache/
+.vscode/
+.claude/
+
+# Data files (mounted as volume in compose)
+data/
+qdrant_data/
+movies_export.json
+movies_export.jsonl
+*.log
+
+# Local dev only
+.env
+.env.local
+analytics_data/
+archive/
+agent-memory/
+
+# Docs (already in image as docs/ optional; saves ~30KB)
+# Leave docs/ in image: it's the API doc the customer might want

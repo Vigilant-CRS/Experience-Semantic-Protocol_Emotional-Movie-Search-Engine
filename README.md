@@ -1,84 +1,130 @@
-# MindRead V3 — Emotional Movie Search
+# MindRead V3 — Emotional Movie Search Engine
 
-A search engine for films that understands what you want to *feel*, not just keyword-match.
-
-```
-"düstere Rachefilme mit Happy End"  →  John Wick, Wake of Death, Furious 7
-"cyberpunk Filme mit Action"        →  Ghost in the Shell, Alita: Battle Angel, RoboCop
-"Filme wie Im Auftrag des Teufels"  →  Needful Things, Under Suspicion, Lolita
-```
-
-## Tech-Stack
-
-- **Embedding**: `intfloat/multilingual-e5-large` (DE/EN für Synopsis)
-- **Vector DB**: Qdrant 1.14 — 1 dense (1024-dim cosine) + 2 sparse (emotion 30-dim L1=1, theme 88-dim L1=1)
-- **LLM (Intent extraction)**: OpenAI gpt-5.4-mini (default) | Mistral | Anthropic | local Qwen — switchable
-- **Fusion**: Reciprocal Rank Fusion across 3 channels (+ optional 4th personal channel)
-- **Backend**: FastAPI (~400 lines)
-- **Frontend**: vanilla JS + SVG Plutchik-Wheel (~600 lines)
-- **DNA**: 128 canonical ontology tags (24 Plutchik emotions + 6 viewer impacts + 35 plot themes + 18 genres + 15 settings + 10 archetypes + 12 moods + 8 pacing)
-
-## Project Structure
+Plug-and-Play software for streaming providers. Search films by **how they feel**, not just keywords.
 
 ```
-api_v3.py                  ← FastAPI server (entry point)
-frontend/index.html        ← SPA with Wheel UI
-config/ontology_v3/        ← 128-tag ontology + synonyms + definitions
-scripts/
-  extract_dna_v3.py        ← LLM-based DNA extraction (default: gpt-5.4-mini)
-  reindex_v3.py            ← (Re)build Qdrant collection
-  search_v3.py             ← Hybrid search with RRF fusion
-  fetch_tmdb_v3.py         ← TMDB bulk fetcher
-  enrich_payload_tmdb.py   ← Adds posters, vote_count, popularity
-  enrich_providers_tmdb.py ← Adds streaming_providers per region
-  llm_local.py             ← Qwen-via-llama-cpp adapter
-  eval_v3.py               ← Quality eval suite
-docs/
-  USER_GUIDE.md            ← End-user UI documentation
-  API_GUIDE.md             ← Integration guide for developers
-PRODUCTIZATION_BRIEF.md    ← B2B sales doc (Magenta TV / Maxdome)
+"düstere Rachefilme mit Happy End"        →  John Wick, Wake of Death, Furious 7
+"Filme wie Amélie aber mit mehr Action"    →  Run Lola Run, Big Fish, Hugo
+"Mafiafilme aus den 90ern"                 →  Goodfellas, Casino, Donnie Brasco
+"feel-good Sci-Fi"                         →  Wall-E, The Martian, Back to the Future
 ```
 
-## Run It
+## What this is
+
+A **search engine you embed in your own UI**. Customer brings their catalog, we provide the engine. Not SaaS — software license. Customer hosts on their infrastructure.
+
+| | |
+|---|---|
+| Deployment | 1-Command Docker bundle: `docker compose up -d` |
+| Ingest | `POST /api/admin/films` — feed in your catalog, get back search-ready vectors |
+| Query | `POST /api/search` — natural-language → ranked results |
+| LLM-Provider | OpenAI (default) or local Qwen via llama-cpp — switchable |
+| GPU | Optional. E5 + Qwen both auto-detect CUDA when `sm_70+` available |
+| Auth / Multi-Tenant | Out-of-scope by design — customer handles in API gateway |
+
+## Quickstart (1-Command)
 
 ```bash
-# 1. Qdrant
-docker compose up -d qdrant
-
-# 2. Extract DNA (one-time, ~$25 OpenAI for 7K films)
-venv/bin/python3 scripts/extract_dna_v3.py --workers 20
-
-# 3. Reindex to Qdrant
-CUDA_VISIBLE_DEVICES="" venv/bin/python3 scripts/reindex_v3.py --recreate
-
-# 4. Enrich with posters + providers
-venv/bin/python3 scripts/enrich_payload_tmdb.py
-venv/bin/python3 scripts/enrich_providers_tmdb.py --region DE
-
-# 5. Start API + UI
-CUDA_VISIBLE_DEVICES="" venv/bin/python3 -m uvicorn api_v3:app --host 0.0.0.0 --port 8000
-# → http://localhost:8000/
+cp .env.example .env       # set OPENAI_API_KEY (or LOCAL_LLM_ENABLED=1)
+docker compose up -d       # starts qdrant + api in detached mode
+docker compose logs -f api # watch startup (~60s for E5 model download)
 ```
 
-## Environment
+Then:
+- **http://localhost:8000** — demo frontend (Wheel UI)
+- **http://localhost:8000/api/docs** — interactive API explorer (Swagger)
+- **http://localhost:8000/api/health** — status
 
-| var | purpose |
-|:--|:--|
-| `OPENAI_API_KEY` | Default LLM provider |
-| `TMDB_API_KEY` | Bulk fetch + enrichments |
-| `LOCAL_LLM_ENABLED=1` | Use local Qwen instead of OpenAI |
-| `LOCAL_LLM_SIZE=2b\|4b` | Which Qwen GGUF to load |
-| `TENANT_PROVIDERS_ALLOWED="Magenta TV+,DAZN"` | Restrict provider list per tenant |
+## Ingesting your catalog
 
-## Documentation
+```python
+import requests, json
+films = [
+    {"tmdb_id": 1, "title": "...", "overview": "...", "year": 2024, ...},
+    # up to 200 per call
+]
+r = requests.post("http://localhost:8000/api/admin/films",
+                   json={"films": films, "do_index": True})
+print(r.json())   # {"extracted": 200, "indexed": 200, "elapsed_ms": 220000}
+```
 
-- [User Guide (UI)](docs/USER_GUIDE.md)
-- [API Guide (developer integration)](docs/API_GUIDE.md)
-- [Productization Brief (B2B sales)](PRODUCTIZATION_BRIEF.md)
+For 50K films: batch into 250 chunks of 200; total wall-clock ~6 hours via OpenAI gpt-5-mini (depends on rate limits).
 
-## Status (2026-05-04)
+## Architecture
 
-- ✅ Live: 7018 Filme, multilingual, hybrid-Search
-- 🔄 In progress: 14K weitere Filme von TMDB → DNA-Extract → Reindex (geplant)
-- 🔄 GPU-Treiber-Fix nötig für lokales Qwen-Live (sudo-Job, dann llama-cpp mit CUDA neu bauen)
-- ⏳ Open: Mobile UI, Onboarding-Tour, Authentication
+| Component | Role |
+|---|---|
+| `api_v3.py` | FastAPI service: `/api/search`, `/api/admin/films`, `/api/ontology`, `/api/film/{id}`, `/api/health` |
+| `frontend/index.html` | SPA demo: Plutchik Wheel + Sliders. Customer may use directly or build their own |
+| `config/ontology_v3/` | 162 canonical tags + synonyms + definitions + DE translations |
+| `config/engine_params.yaml` | All tunable retrieval/scoring constants in one place |
+| `scripts/extract_dna_v3.py` | LLM-based DNA extraction (OpenAI or local Qwen) |
+| `scripts/reindex_v3.py` | Build/rebuild Qdrant collection from JSONL |
+| `scripts/search_v3.py` | Hybrid retrieval — RRF over 3 channels |
+| `scripts/llm_local.py` | Qwen via llama-cpp-python adapter |
+| `scripts/eval_v3.py` | 29-test quality suite |
+| `Dockerfile` | CPU-only multi-stage build, optional CUDA stage commented in |
+| `docker-compose.yml` | api + qdrant + named volumes |
+| `docs/API_GUIDE.md` | Full integration guide |
+
+## Retrieval Architecture
+
+Three orthogonal vectors per film (all in Qdrant):
+
+| Vector | Dim | What it captures |
+|---|---|---|
+| `synopsis_dense` | 1024 | E5-large-v2 semantic embedding of overview text |
+| `emotion_sparse` | 30 | Plutchik 8×3 emotions + 6 viewer-impact tags (L1-normalized) |
+| `theme_sparse` | 112 | plot_themes(35) + genres(18) + settings(15) + moods(12) + pacing(8) + subjects(24) |
+
+Plus payload-only fields: archetype, protagonist_gender, content_features (10 advisories), streaming_providers, etc.
+
+Fusion via **weighted Reciprocal Rank Fusion** (Cormack 2009 extension) — each channel's top-K combined with slider weights. User can dial the mix.
+
+## Configuration
+
+| Env var | Default | What |
+|---|---|---|
+| `OPENAI_API_KEY` | — | required for OpenAI LLM path |
+| `EMBEDDING_DEVICE` | `auto` | `auto`/`cuda`/`cpu` for E5. Auto picks CUDA on sm_70+ GPUs |
+| `LOCAL_LLM_ENABLED` | `0` | `1` → use local Qwen for `/api/search` (needs `LOCAL_LLM_MODEL_DIR`) |
+| `LOCAL_LLM_MODEL_DIR` | — | directory containing GGUF model files |
+| `LOCAL_LLM_SIZE` | `2b` | `2b` or `4b` — which Qwen variant to auto-pick from MODEL_DIR |
+| `CORS_ORIGINS` | `*` | comma-separated origins for production |
+
+All retrieval parameters live in **`config/engine_params.yaml`** with documented rationale. Edit + restart, no code changes.
+
+Full reference: [`docs/API_GUIDE.md`](docs/API_GUIDE.md)
+
+## Quality Eval
+
+```bash
+docker compose exec api python scripts/eval_v3.py
+# 29 tests covering similar_to, free-text, tone-shift, avoid filters, etc.
+# Currently passes 23-26/29 (LLM non-determinism causes ±5% variance)
+```
+
+## Dev Setup (without Docker)
+
+```bash
+python3.12 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env  # fill in
+docker compose up -d qdrant
+uvicorn api_v3:app --host 0.0.0.0 --port 8000
+```
+
+## Status
+
+- ✅ 7018 films indexed (demo corpus only — customer brings their own)
+- ✅ Plug-and-Play ingest endpoint
+- ✅ Docker bundle
+- ✅ Engine config externalized to YAML
+- ✅ Auto GPU/CPU device selection
+- ✅ Engine swappable: OpenAI / local Qwen / any OpenAI-compatible endpoint
+- 🔄 In flight: Block C — corpus consolidation + reindex with emotion/wirkung separate L1 + subjects as own channel
+
+## License & Sales
+
+Commercial software license. Contact for B2B integration: see PRODUCTIZATION_BRIEF.md.

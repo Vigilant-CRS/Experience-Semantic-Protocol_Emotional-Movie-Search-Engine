@@ -559,10 +559,29 @@ def get_film(tmdb_id: int):
     return pts[0].payload
 
 
+def _wait_for_qdrant(max_wait_s: int = 60) -> bool:
+    """Poll Qdrant readiness during startup (docker-compose race-condition safety).
+    Returns True if collection became reachable, False if not within max_wait_s."""
+    deadline = time.time() + max_wait_s
+    last_err = None
+    while time.time() < deadline:
+        try:
+            QDRANT.get_collection(COLLECTION)
+            return True
+        except Exception as e:
+            last_err = e
+            time.sleep(2)
+    log.warning(f"Qdrant not ready after {max_wait_s}s; last error: {last_err}")
+    return False
+
+
 def _build_title_index():
     """One-time at startup: scroll all titles into an in-memory dict.
     Avoids per-query Qdrant scrolls for similar_to_title lookup."""
     log.info("Building title index from Qdrant…")
+    if not _wait_for_qdrant():
+        log.warning("Qdrant unavailable; title index will be empty until first refresh-title-index call")
+        return
     offset = None
     n = 0
     while True:

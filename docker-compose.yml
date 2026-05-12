@@ -1,23 +1,68 @@
-version: '3.8'
+# MindRead V3 — 1-Command-Deploy
+#
+#   docker compose up -d            # build & run (api + qdrant)
+#   docker compose logs -f api      # tail
+#   docker compose down             # stop (data volumes survive)
+#
+# Frontend is served by the api container at GET /
+# Swagger: GET /api/docs
+# Health:  GET /api/health
+#
+# Customer setup:
+#   1. cp .env.example .env  →  fill OPENAI_API_KEY (or set LOCAL_LLM_ENABLED=1)
+#   2. docker compose up -d
+#   3. Bulk-load catalog via POST /api/admin/films  (batches of <=200)
 
 services:
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.14.1
+    container_name: mindread-qdrant
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "6333:6333"   # REST
+      - "6334:6334"   # gRPC
     volumes:
-      - ./qdrant_data:/qdrant/storage
+      - qdrant_data:/qdrant/storage
     environment:
       - QDRANT__SERVICE__HTTP_PORT=6333
       - QDRANT__SERVICE__GRPC_PORT=6334
+      - QDRANT__LOG_LEVEL=INFO
     restart: unless-stopped
 
-  # Redis auskommentiert - läuft schon als System Service
-  # redis:
-  #   image: redis:7-alpine
-  #   ports:
-  #     - "6379:6379"
-  #   volumes:
-  #     - ./redis_data:/data
-  #   command: redis-server --appendonly yes
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mindread-api
+    image: mindread:v3
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env       # OPENAI_API_KEY etc.
+    environment:
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      QDRANT_COLLECTION_V3: ${QDRANT_COLLECTION_V3:-mindread_v3}
+      EMBEDDING_DEVICE: ${EMBEDDING_DEVICE:-auto}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-intfloat/e5-large-v2}
+      LOCAL_LLM_ENABLED: ${LOCAL_LLM_ENABLED:-0}
+      LOCAL_LLM_MODEL_DIR: ${LOCAL_LLM_MODEL_DIR:-}
+      LOCAL_LLM_SIZE: ${LOCAL_LLM_SIZE:-2b}
+      OPENAI_MODEL_DNA: ${OPENAI_MODEL_DNA:-gpt-5-mini}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    volumes:
+      # JSONL audit-trail of extractions + logs
+      - ./data:/app/data
+      # Customer-tunable engine knobs without rebuild
+      - ./config/engine_params.yaml:/app/config/engine_params.yaml:ro
+      # HuggingFace E5 model cache (avoid re-download on every restart)
+      - hf_cache:/cache/huggingface
+      # Local GGUF models (only relevant if LOCAL_LLM_ENABLED=1).
+      # Customer mounts their model directory here.
+      - ${LOCAL_LLM_MODEL_DIR_HOST:-./models}:/models:ro
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+
+volumes:
+  qdrant_data:        # Qdrant collection storage — survives container restart
+  hf_cache:           # ~1.4 GB E5 model cache
