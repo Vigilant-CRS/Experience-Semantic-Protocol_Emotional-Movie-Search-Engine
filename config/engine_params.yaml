@@ -7,6 +7,19 @@
 #
 # File format: YAML.  Loaded once at startup; restart API to apply changes.
 
+# Sparse-vector schema version.
+#   1 = legacy (production, in-use 2026-05): emotions+wirkung joint-L1;
+#       subjects live inside theme_sparse at indices 88-111.
+#   2 = audit F-016 + F-017 layout: emotions and wirkung normalized separately;
+#       subjects extracted to their own subject_sparse vector (clean orthogonal
+#       channel). Activating v2 requires a full `reindex_v3 --recreate` because
+#       Qdrant collection schema changes (new named sparse vector + theme_sparse
+#       indices shift from 112-dim back to 88-dim).
+#
+# Bump to 2 only when ready to reindex from scratch.
+schema:
+  version: 1
+
 retrieval:
   # Default channel weights — slider initial positions.  Must each be in [0, 1].
   # Customer slider UI typically normalizes the sum to 1.0 but is not required to.

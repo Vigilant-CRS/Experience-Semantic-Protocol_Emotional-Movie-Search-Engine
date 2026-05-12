@@ -342,12 +342,36 @@ def filter_to_canonical(d: Dict[str, float], allowed: List[str],
     return out
 
 
+_SCHEMA_VERSION_CACHED: Optional[int] = None
+
+
+def _engine_schema_version() -> int:
+    """Read schema.version from engine_params.yaml; cached. Default 1 (legacy)."""
+    global _SCHEMA_VERSION_CACHED
+    if _SCHEMA_VERSION_CACHED is not None:
+        return _SCHEMA_VERSION_CACHED
+    try:
+        import yaml
+        cfg = yaml.safe_load(open(ROOT / "config" / "engine_params.yaml")) or {}
+        _SCHEMA_VERSION_CACHED = int(cfg.get("schema", {}).get("version", 1))
+    except Exception:
+        _SCHEMA_VERSION_CACHED = 1
+    return _SCHEMA_VERSION_CACHED
+
+
 def normalize_dna(raw: Dict[str, Any], ont: Dict[str, Any]) -> Dict[str, Any]:
     syns = ont["synonyms"]
-    # emotion_sparse = emotions + wirkung, jointly L1-normalized
     emo = filter_to_canonical(raw.get("emotions", {}), ont["emotions"], syns)
     wir = filter_to_canonical(raw.get("wirkung", {}), ont["wirkung"], syns)
-    emotion_sparse = normalize_l1({**emo, **wir})
+    schema = _engine_schema_version()
+    if schema >= 2:
+        # F-016 fix: emotions and wirkung normalized SEPARATELY.
+        # Two semantic axes (protagonist-feeling vs viewer-impact) → two
+        # independent L1 budgets. Joint dict has total L1 = 2.
+        emotion_sparse = {**normalize_l1(emo), **normalize_l1(wir)}
+    else:
+        # v1 legacy: jointly L1-normalized (total L1 = 1, the two axes compete).
+        emotion_sparse = normalize_l1({**emo, **wir})
 
     # theme_sparse = themes + genres, jointly L1-normalized
     th = filter_to_canonical(raw.get("themes", {}), ont["plot_themes"], syns)

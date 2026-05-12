@@ -71,6 +71,11 @@ def _ep(*path: str, default: Any) -> Any:
     return cur
 
 
+def schema_version() -> int:
+    """Sparse-vector schema in use. See engine_params.yaml schema.version."""
+    return int(_ep("schema", "version", default=1))
+
+
 def load_env():
     env = ROOT / ".env"
     if env.exists():
@@ -83,12 +88,13 @@ def load_env():
 
 
 def load_indices() -> Tuple[Dict[str, int], Dict[str, int]]:
-    """Same layout as reindex_v3.load_ontology_indices() — must stay in sync.
+    """Schema-v1 layout (production). For schema-v2 use load_indices_v2().
 
-    Theme-sparse layout (extended 2026-05): plot_themes(35) + genres(18) + settings(15) +
-    moods(12) + pacing(8) + subjects(N). Subjects are APPENDED AT END so adding them
-    does not shift any existing index. Films stored before subjects existed have no
-    entries at indices >=88 — graceful no-op for them.
+    Theme-sparse layout v1: plot_themes(35) + genres(18) + settings(15) +
+    moods(12) + pacing(8) + subjects(24) = 112 dim.  Emotions(24)+wirkung(6)
+    jointly L1-normalized in emotion_sparse = 30 dim.
+
+    Stay in sync with reindex_v3.load_ontology_indices().
     """
     emo = json.load(open(ONT_DIR / "emotions.json"))["tags"]
     wir = json.load(open(ONT_DIR / "wirkung.json"))["tags"]
@@ -101,6 +107,34 @@ def load_indices() -> Tuple[Dict[str, int], Dict[str, int]]:
     subjects = json.load(open(subjects_path))["tags"] if subjects_path.exists() else []
     return ({t: i for i, t in enumerate(emo + wir)},
             {t: i for i, t in enumerate(th + gn + settings + moods + pacing + subjects)})
+
+
+def load_indices_v2() -> Tuple[Dict[str, int], Dict[str, int], Dict[str, int]]:
+    """Schema-v2 layout (audit F-016 + F-017 ready). Three index maps:
+
+      emotion_to_idx — 30 dim, BUT emotions(24) and wirkung(6) normalized
+                        separately (handled at normalize_dna level, indices same)
+      theme_to_idx   — 88 dim, subjects EXTRACTED from theme_sparse
+      subject_to_idx — 24 dim, NEW dedicated subject_sparse vector
+
+    Activating v2 requires a `reindex_v3 --recreate` because the Qdrant
+    collection gets a new sparse vector named subject_sparse and the
+    existing theme_sparse storage layout changes (subjects no longer at
+    indices 88-111).
+    """
+    emo = json.load(open(ONT_DIR / "emotions.json"))["tags"]
+    wir = json.load(open(ONT_DIR / "wirkung.json"))["tags"]
+    th = json.load(open(ONT_DIR / "plot_themes.json"))["tags"]
+    gn = json.load(open(ONT_DIR / "genres.json"))["tags"]
+    settings = json.load(open(ONT_DIR / "settings.json"))["tags"]
+    moods = json.load(open(ONT_DIR / "moods.json"))["tags"]
+    pacing = json.load(open(ONT_DIR / "pacing.json"))["tags"]
+    subjects = json.load(open(ONT_DIR / "subjects.json"))["tags"]
+    return (
+        {t: i for i, t in enumerate(emo + wir)},                              # 30 dim
+        {t: i for i, t in enumerate(th + gn + settings + moods + pacing)},    # 88 dim (no subjects)
+        {t: i for i, t in enumerate(subjects)},                                # 24 dim
+    )
 
 
 def to_sparse(weights: Dict[str, float], tag_to_idx: Dict[str, int]) -> SparseVector:
@@ -276,7 +310,11 @@ def manual_weighted_fusion(client: QdrantClient,
                            user_synopsis_vec: Optional[np.ndarray] = None,
                            user_emotion_sparse: Optional[SparseVector] = None,
                            user_theme_sparse: Optional[SparseVector] = None,
-                           w_personal: float = 0.0) -> List[Dict[str, Any]]:
+                           w_personal: float = 0.0,
+                           # ── subject channel (schema v2 — audit F-017) ──
+                           subject_sparse: Optional[SparseVector] = None,
+                           user_subject_sparse: Optional[SparseVector] = None,
+                           ) -> List[Dict[str, Any]]:
     """Weighted Reciprocal Rank Fusion (RRF) — extension of Cormack 2009.
 
     Score per film = Σ_channel weight × 1/(rrf_k + rank_in_channel).
@@ -319,6 +357,19 @@ def manual_weighted_fusion(client: QdrantClient,
         sparse_q = {"indices": list(theme_sparse.indices), "values": list(theme_sparse.values)}
         hits = _query_one_channel("theme_sparse", sparse_q, filter_dict, over)
         add("theme", hits, weights["w_theme"])
+    if (subject_sparse is not None and subject_sparse.indices
+            and weights.get("w_subject", 0) > 0):
+        # Schema v2 only: subjects as own retrieval channel (audit F-017).
+        # When the collection has no subject_sparse vector named, Qdrant
+        # returns an empty list and we skip the channel.
+        sparse_q = {"indices": list(subject_sparse.indices),
+                    "values": list(subject_sparse.values)}
+        try:
+            hits = _query_one_channel("subject_sparse", sparse_q, filter_dict, over)
+            add("subject", hits, weights["w_subject"])
+        except Exception:
+            # Collection without subject_sparse named vector (v1) → silently skip
+            pass
     # ── Personal channel: searches via the user's averaged DNA ────────────
     if w_personal > 0:
         if user_synopsis_vec is not None:

@@ -50,8 +50,9 @@ sys.path.insert(0, str(ROOT))
 # Quadro P620) fall back to CPU automatically — no env hack needed.
 
 from scripts.search_v3 import (
-    load_indices, to_sparse, manual_weighted_fusion,
-    encode_query_text, COLLECTION, _ep as _engine_param,
+    load_indices, load_indices_v2, to_sparse, manual_weighted_fusion,
+    encode_query_text, COLLECTION, schema_version as _schema_version,
+    _ep as _engine_param,
 )
 from qdrant_client.models import (
     Filter, FieldCondition, MatchValue, MatchAny, Range,
@@ -82,7 +83,12 @@ load_env()
 
 # ─── globals ──────────────────────────────────────────────────────────────
 ONT = load_ontology()
-EMOTION_IDX, THEME_IDX = load_indices()
+SCHEMA_VERSION = _schema_version()
+if SCHEMA_VERSION >= 2:
+    EMOTION_IDX, THEME_IDX, SUBJECT_IDX = load_indices_v2()
+else:
+    EMOTION_IDX, THEME_IDX = load_indices()
+    SUBJECT_IDX = None
 SYSTEM_PROMPT = build_system_prompt(ONT)
 
 # Default LLM provider, built from env once at startup.
@@ -161,6 +167,12 @@ class SearchRequest(BaseModel):
     w_synopsis: float = Field(0.35, ge=0.0, le=1.0)
     w_emotion: float = Field(0.35, ge=0.0, le=1.0)
     w_theme: float = Field(0.30, ge=0.0, le=1.0)
+    w_subject: float = Field(
+        0.0, ge=0.0, le=1.0,
+        description="Subject-channel weight. Effective only with schema v2 "
+                    "(separate subject_sparse vector — audit F-017 fix). "
+                    "Default 0.0 keeps v1 behavior identical.",
+    )
     indie_mainstream: float = Field(0.0, ge=-1.0, le=1.0,
                                     description="-1=indie, 0=neutral, +1=mainstream")
 
@@ -784,7 +796,8 @@ def search(req: SearchRequest):
     t0 = time.time()
     weights = {"w_synopsis": req.w_synopsis,
                "w_emotion": req.w_emotion,
-               "w_theme": req.w_theme}
+               "w_theme": req.w_theme,
+               "w_subject": req.w_subject if SCHEMA_VERSION >= 2 else 0.0}
     # Apply tenant provider whitelist if configured
     requested_providers = req.streaming_providers or []
     if TENANT_PROVIDERS_ALLOWED:
@@ -821,10 +834,12 @@ def search(req: SearchRequest):
     synopsis_vec = None
     emotion_sparse = None
     theme_sparse = None
+    subject_sparse = None    # schema v2 only
     intent: Optional[IntentInfo] = None
     reference_title: Optional[str] = None
     query_emo: Dict[str, float] = {}
     query_th: Dict[str, float] = {}
+    query_subj: Dict[str, float] = {}
 
     if req.similar_to:
         ref = QDRANT.retrieve(COLLECTION, ids=[req.similar_to],
@@ -835,32 +850,46 @@ def search(req: SearchRequest):
         reference_title = (rp.payload or {}).get("title")
         query_emo = (rp.payload or {}).get("emotion_dna") or {}
         query_th = (rp.payload or {}).get("theme_dna") or {}
+        query_subj = (rp.payload or {}).get("subjects") or {}
         vec = rp.vector or {}
         synopsis_vec = np.array(vec.get("synopsis_dense")) if vec.get("synopsis_dense") is not None else None
         es = vec.get("emotion_sparse"); ts = vec.get("theme_sparse")
         from qdrant_client.models import SparseVector
         emotion_sparse = SparseVector(indices=list(es.indices), values=list(es.values)) if es else None
         theme_sparse = SparseVector(indices=list(ts.indices), values=list(ts.values)) if ts else None
+        # Schema v2: pull the dedicated subject_sparse vector too (if present)
+        if SCHEMA_VERSION >= 2:
+            sb = vec.get("subject_sparse")
+            subject_sparse = SparseVector(indices=list(sb.indices),
+                                           values=list(sb.values)) if sb else None
     elif req.adjusted_emotions or req.adjusted_themes:
         # Wheel-only adjustment, no LLM call
         query_emo = req.adjusted_emotions or {}
         query_th = req.adjusted_themes or {}
         synopsis_vec = encode_query_text(req.query) if req.query else None
         emotion_sparse = to_sparse(query_emo, EMOTION_IDX)
-        # Note: adjusted_themes covers all 88 dims (themes/genres/settings/moods/pacing)
         theme_sparse = to_sparse(query_th, THEME_IDX)
+        # Schema v2: if adjusted_themes contains canonical subject tags, split
+        # them off into subject_sparse so the user wheel still drives both.
+        if SCHEMA_VERSION >= 2 and SUBJECT_IDX:
+            subj_part = {t: w for t, w in query_th.items() if t in SUBJECT_IDX}
+            if subj_part:
+                subject_sparse = to_sparse(subj_part, SUBJECT_IDX)
     else:
         # Free-text via LLM
         dna = llm_query_to_dna(req.query)
         query_emo = dna.get("emotion_sparse", {})
-        # Combine themes+genres with settings/moods/pacing/subjects for the wider sparse layout
+        query_subj = dna.get("subjects") or {}
+        # Theme: v1 includes subjects (legacy 112-dim layout); v2 excludes them
+        # (they go to subject_sparse channel — audit F-017).
         query_th = {
             **(dna.get("theme_sparse") or {}),
             **(dna.get("setting") or {}),
             **(dna.get("mood") or {}),
             **(dna.get("pacing") or {}),
-            **(dna.get("subjects") or {}),
         }
+        if SCHEMA_VERSION < 2:
+            query_th.update(dna.get("subjects") or {})
 
         # If LLM detected "wie X" reference, try to resolve title → DNA
         ref_title = dna.get("similar_to_title")
@@ -943,6 +972,8 @@ def search(req: SearchRequest):
             synopsis_vec = encode_query_text(translated)
         emotion_sparse = to_sparse(query_emo, EMOTION_IDX)
         theme_sparse = to_sparse(query_th, THEME_IDX)
+        if SCHEMA_VERSION >= 2 and SUBJECT_IDX:
+            subject_sparse = to_sparse(query_subj, SUBJECT_IDX)
 
     # Combine user-supplied avoids with LLM-extracted ones (free-text path)
     avoid_emotions = list(set((req.avoid_emotions or []) +
@@ -1023,6 +1054,7 @@ def search(req: SearchRequest):
         user_emotion_sparse=user_emotion_sparse,
         user_theme_sparse=user_theme_sparse,
         w_personal=req.w_personal if user_profile_meta else 0.0,
+        subject_sparse=subject_sparse,    # schema v2 only
     )
     if req.similar_to:
         raw = [r for r in raw if r["id"] != req.similar_to]

@@ -40,12 +40,7 @@ VECTOR_DIM = 1024
 
 
 def load_ontology_indices():
-    """Build stable tag→index maps for sparse vectors.
-    theme_sparse layout (extended 2026-05):
-      plot_themes(35) + genres(18) + settings(15) + moods(12) + pacing(8) + subjects(N)
-    Subjects are APPENDED at the end so adding them doesn't shift the existing 0-87
-    indices. Each sub-bucket keeps its own L1=1 internally.
-
+    """Schema-v1 (legacy) layout. For schema-v2 use load_ontology_indices_v2().
     Stay in sync with scripts/search_v3.py:load_indices().
     """
     emo = json.load(open(ONT_DIR / "emotions.json"))["tags"]
@@ -60,6 +55,35 @@ def load_ontology_indices():
     emotion_to_idx = {t: i for i, t in enumerate(emo + wir)}                                # 30 dims
     theme_to_idx = {t: i for i, t in enumerate(th + gn + settings + moods + pacing + subjects)}
     return emotion_to_idx, theme_to_idx
+
+
+def load_ontology_indices_v2():
+    """Schema-v2 layout (audit F-016 + F-017 ready).
+    Returns 3 maps: emotion_to_idx, theme_to_idx (no subjects), subject_to_idx.
+    Stay in sync with scripts/search_v3.py:load_indices_v2().
+    """
+    emo = json.load(open(ONT_DIR / "emotions.json"))["tags"]
+    wir = json.load(open(ONT_DIR / "wirkung.json"))["tags"]
+    th = json.load(open(ONT_DIR / "plot_themes.json"))["tags"]
+    gn = json.load(open(ONT_DIR / "genres.json"))["tags"]
+    settings = json.load(open(ONT_DIR / "settings.json"))["tags"]
+    moods = json.load(open(ONT_DIR / "moods.json"))["tags"]
+    pacing = json.load(open(ONT_DIR / "pacing.json"))["tags"]
+    subjects = json.load(open(ONT_DIR / "subjects.json"))["tags"]
+    return (
+        {t: i for i, t in enumerate(emo + wir)},                              # 30 dim
+        {t: i for i, t in enumerate(th + gn + settings + moods + pacing)},    # 88 dim
+        {t: i for i, t in enumerate(subjects)},                                # 24 dim
+    )
+
+
+def _schema_version_from_config() -> int:
+    try:
+        import yaml
+        cfg = yaml.safe_load(open(ROOT / "config" / "engine_params.yaml")) or {}
+        return int(cfg.get("schema", {}).get("version", 1))
+    except Exception:
+        return 1
 
 
 def to_sparse(weights: Dict[str, float], tag_to_idx: Dict[str, int]) -> SparseVector:
@@ -101,16 +125,22 @@ def setup_collection(client: QdrantClient, recreate: bool):
         client.delete_collection(COLLECTION)
         exists = False
     if not exists:
-        print(f"Creating collection: {COLLECTION}")
+        schema_v = _schema_version_from_config()
+        sparse_cfg = {
+            "emotion_sparse": SparseVectorParams(),
+            "theme_sparse": SparseVectorParams(),
+        }
+        if schema_v >= 2:
+            # F-017 fix: subjects get their own sparse vector
+            sparse_cfg["subject_sparse"] = SparseVectorParams()
+        print(f"Creating collection: {COLLECTION} (schema v{schema_v}, "
+              f"sparse vectors: {list(sparse_cfg.keys())})")
         client.create_collection(
             collection_name=COLLECTION,
             vectors_config={
                 "synopsis_dense": VectorParams(size=VECTOR_DIM, distance=Distance.COSINE),
             },
-            sparse_vectors_config={
-                "emotion_sparse": SparseVectorParams(),
-                "theme_sparse": SparseVectorParams(),
-            },
+            sparse_vectors_config=sparse_cfg,
         )
     # payload indexes
     base_indexes = [
@@ -159,20 +189,29 @@ def upsert_films(client: QdrantClient,
                  films_meta: List[Dict[str, Any]],
                  dna_records: Dict[int, Dict[str, Any]],
                  emotion_to_idx: Dict[str, int],
-                 theme_to_idx: Dict[str, int]) -> int:
+                 theme_to_idx: Dict[str, int],
+                 subject_to_idx: Optional[Dict[str, int]] = None) -> int:
     """Build vectors + payload for the given films and upsert into Qdrant.
 
-    Extracted from main() so the api_v3 admin endpoint can reuse it (audit
-    Block B: plug-and-play ingest).
+    Schema-aware: when subject_to_idx is provided we're in v2 mode and
+    write three sparse vectors (emotion + theme + subject) plus re-normalize
+    emotion_sparse with separate L1 for emotions vs wirkung (defensive: old
+    JSONL entries with joint-L1 get corrected here).
 
     Args:
-        client:       QdrantClient
-        films_meta:   list of full film metadata dicts (title, year, overview, …)
-        dna_records:  {tmdb_id: {"dna_v3": {...}}} — output of extract_one wrapped
-        emotion_to_idx, theme_to_idx: layout (from load_ontology_indices())
+        client:        QdrantClient
+        films_meta:    list of film metadata dicts (title, year, overview, …)
+        dna_records:   {tmdb_id: {"dna_v3": {...}}} — extract_one() output
+        emotion_to_idx, theme_to_idx: layout (from load_ontology_indices() or _v2)
+        subject_to_idx: present iff schema-v2 — triggers F-017 subject_sparse build
 
     Returns: number of points upserted.
     """
+    from scripts.extract_dna_v3 import normalize_l1 as _l1
+    # Ontology buckets for defensive normalization
+    ont_emo_tags = set(json.load(open(ONT_DIR / "emotions.json"))["tags"])
+    ont_wir_tags = set(json.load(open(ONT_DIR / "wirkung.json"))["tags"])
+    schema_v2 = subject_to_idx is not None
     model = _embedder()
     texts = [make_synopsis_text(m) for m in films_meta]
     emb = model.encode(texts, batch_size=32, convert_to_numpy=True,
@@ -214,18 +253,36 @@ def upsert_films(client: QdrantClient,
             year_int = None
         payload["year"] = year_int
 
+        # Build emotion sparse — schema-aware
+        emo_dict_raw = d.get("emotion_sparse", {}) or {}
+        if schema_v2:
+            # F-016: split joint emotion+wirkung into separate L1 buckets.
+            # Works on either old (joint) or new (separate) JSONL — splits by
+            # tag membership, normalizes each independently.
+            emo_only = {t: w for t, w in emo_dict_raw.items() if t in ont_emo_tags}
+            wir_only = {t: w for t, w in emo_dict_raw.items() if t in ont_wir_tags}
+            emo_normalized = {**_l1(emo_only), **_l1(wir_only)}
+        else:
+            emo_normalized = emo_dict_raw  # legacy joint-L1 from extract
+
+        # Build theme — schema-aware (v2 has subjects in a separate vector)
         combined_theme = {
             **(d.get("theme_sparse") or {}),
             **(d.get("setting") or {}),
             **(d.get("mood") or {}),
             **(d.get("pacing") or {}),
-            **(d.get("subjects") or {}),
         }
-        vectors = {
+        if not schema_v2:
+            combined_theme.update(d.get("subjects") or {})
+
+        vectors: Dict[str, Any] = {
             "synopsis_dense": emb[i].tolist(),
-            "emotion_sparse": to_sparse(d.get("emotion_sparse", {}), emotion_to_idx),
+            "emotion_sparse": to_sparse(emo_normalized, emotion_to_idx),
             "theme_sparse":   to_sparse(combined_theme, theme_to_idx),
         }
+        if schema_v2:
+            vectors["subject_sparse"] = to_sparse(d.get("subjects") or {}, subject_to_idx)
+
         points.append(PointStruct(id=tid, vector=vectors, payload=payload))
 
     client.upsert(collection_name=COLLECTION, points=points, wait=True)
@@ -268,7 +325,14 @@ def main():
     client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=120.0)
     setup_collection(client, args.recreate)
 
-    emotion_to_idx, theme_to_idx = load_ontology_indices()
+    schema_v = _schema_version_from_config()
+    if schema_v >= 2:
+        print(f"Schema v{schema_v}: emotion(separate L1) + theme(no subjects) + subject_sparse")
+        emotion_to_idx, theme_to_idx, subject_to_idx = load_ontology_indices_v2()
+    else:
+        print(f"Schema v{schema_v}: legacy joint-L1 emotion, subjects-in-theme")
+        emotion_to_idx, theme_to_idx = load_ontology_indices()
+        subject_to_idx = None
 
     # prepare batches: encode synopsis_dense, build sparse, upsert
     t0 = time.time()
@@ -325,19 +389,43 @@ def main():
                 year_int = None
             payload["year"] = year_int
 
-            # build named vectors — theme_sparse now spans 6 buckets (subjects appended at end)
-            combined_theme = {
-                **(d.get("theme_sparse") or {}),     # plot_themes + genres (already L1=1 jointly)
-                **(d.get("setting") or {}),          # 15 dims, L1=1
-                **(d.get("mood") or {}),             # 12 dims, L1=1
-                **(d.get("pacing") or {}),           # 8 dims, L1=1
-                **(d.get("subjects") or {}),         # 24 dims (new, appended at end), L1=1
-            }
-            vectors = {
-                "synopsis_dense": emb[i].tolist(),
-                "emotion_sparse": to_sparse(d.get("emotion_sparse", {}), emotion_to_idx),
-                "theme_sparse":   to_sparse(combined_theme, theme_to_idx),
-            }
+            # Build named vectors — schema-aware
+            if schema_v >= 2:
+                # F-016: split emotion/wirkung into separate L1
+                from scripts.extract_dna_v3 import normalize_l1 as _l1
+                ont_emo_tags = set(json.load(open(ONT_DIR / "emotions.json"))["tags"])
+                ont_wir_tags = set(json.load(open(ONT_DIR / "wirkung.json"))["tags"])
+                emo_raw = d.get("emotion_sparse", {}) or {}
+                emo_only = {t: w for t, w in emo_raw.items() if t in ont_emo_tags}
+                wir_only = {t: w for t, w in emo_raw.items() if t in ont_wir_tags}
+                emo_normalized = {**_l1(emo_only), **_l1(wir_only)}
+                # F-017: subjects out of theme_sparse, into separate channel
+                combined_theme = {
+                    **(d.get("theme_sparse") or {}),
+                    **(d.get("setting") or {}),
+                    **(d.get("mood") or {}),
+                    **(d.get("pacing") or {}),
+                }
+                vectors = {
+                    "synopsis_dense": emb[i].tolist(),
+                    "emotion_sparse": to_sparse(emo_normalized, emotion_to_idx),
+                    "theme_sparse":   to_sparse(combined_theme, theme_to_idx),
+                    "subject_sparse": to_sparse(d.get("subjects") or {}, subject_to_idx),
+                }
+            else:
+                # Legacy v1: theme_sparse spans 6 buckets including subjects
+                combined_theme = {
+                    **(d.get("theme_sparse") or {}),
+                    **(d.get("setting") or {}),
+                    **(d.get("mood") or {}),
+                    **(d.get("pacing") or {}),
+                    **(d.get("subjects") or {}),
+                }
+                vectors = {
+                    "synopsis_dense": emb[i].tolist(),
+                    "emotion_sparse": to_sparse(d.get("emotion_sparse", {}), emotion_to_idx),
+                    "theme_sparse":   to_sparse(combined_theme, theme_to_idx),
+                }
             points.append(PointStruct(id=tid, vector=vectors, payload=payload))
 
         client.upsert(collection_name=COLLECTION, points=points, wait=False)
