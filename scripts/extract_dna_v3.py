@@ -473,9 +473,21 @@ def call_local(system: str, user: str, max_retries: int = 3) -> Dict[str, Any]:
     raise RuntimeError(f"local LLM failed after {max_retries} retries: {last_err}")
 
 
-def extract_one(film: Dict[str, Any], system: str, ont: Dict[str, Any]) -> Dict[str, Any]:
+def extract_one(film: Dict[str, Any], system: str, ont: Dict[str, Any],
+                caller=None) -> Dict[str, Any]:
+    """Run LLM extraction on one film record.
+
+    Args:
+        film: dict with at least tmdb_id, title, overview, genres, keywords
+        system: system prompt (build via build_system_prompt(ont))
+        ont: ontology dict (load via load_ontology())
+        caller: function(system, user) -> dict.  Defaults to `_LOCAL_CALL or call_openai`.
+                Pass explicitly when called from concurrent code (api_v3 admin endpoint)
+                to avoid relying on the module-level _LOCAL_CALL global.
+    """
     user = build_user_prompt(film)
-    caller = _LOCAL_CALL or call_openai
+    if caller is None:
+        caller = _LOCAL_CALL or call_openai
     raw = caller(system, user)
     dna = normalize_dna(raw, ont)
     return {

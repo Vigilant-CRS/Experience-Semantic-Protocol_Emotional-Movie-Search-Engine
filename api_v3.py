@@ -369,6 +369,173 @@ def get_ontology(lang: str = "en"):
     }
 
 
+# ─── Admin / Plug-and-Play Ingest ─────────────────────────────────────────
+
+class FilmIngestRecord(BaseModel):
+    """One film row for the ingest endpoint.
+
+    Required: tmdb_id (or any unique customer-side ID), title, overview.
+    The overview is the primary text feeding both the LLM (for DNA) and E5
+    (for synopsis_dense). Without it the film can't be extracted — it's skipped.
+    """
+    tmdb_id: int
+    title: str
+    overview: str
+    original_title: Optional[str] = None
+    year: Optional[int] = None
+    release_date: Optional[str] = None
+    runtime: Optional[int] = None
+    genres: List[str] = Field(default_factory=list)
+    keywords: List[str] = Field(default_factory=list)
+    director: Optional[str] = None
+    cast: List[str] = Field(default_factory=list)
+    vote_count: Optional[int] = None
+    vote_average: Optional[float] = None
+    popularity: Optional[float] = None
+    poster_path: Optional[str] = None
+    backdrop_path: Optional[str] = None
+    streaming_providers: List[str] = Field(default_factory=list)
+    # Optional bilingual DE fields the customer can pre-populate
+    title_de: Optional[str] = None
+    overview_de: Optional[str] = None
+
+
+class IngestRequest(BaseModel):
+    films: List[FilmIngestRecord]
+    use_local_llm: Optional[bool] = Field(
+        None,
+        description="True forces local Qwen, False forces OpenAI, "
+                    "None inherits the LOCAL_LLM_ENABLED env at server startup.",
+    )
+    do_index: bool = Field(True, description="Upsert to Qdrant after extraction.")
+    skip_existing: bool = Field(
+        True,
+        description="Skip films whose tmdb_id is already in the JSONL "
+                    "(typical use: incremental adds without re-extracting).",
+    )
+
+
+class IngestResponse(BaseModel):
+    status: str
+    received: int
+    extracted: int
+    indexed: int
+    skipped_existing: int
+    errors: List[Dict[str, Any]]
+    elapsed_ms: int
+
+
+_INGEST_MAX_PER_CALL = 200  # synchronous limit — larger needs batching by caller
+
+
+def _existing_tmdb_ids() -> set:
+    """Read JSONL once to learn which tmdb_ids already have DNA extracted."""
+    jsonl = ROOT / "data" / "movies_dna_v3.jsonl"
+    seen = set()
+    if not jsonl.exists():
+        return seen
+    with open(jsonl) as f:
+        for line in f:
+            try:
+                seen.add(json.loads(line)["tmdb_id"])
+            except Exception:
+                pass
+    return seen
+
+
+@app.post("/api/admin/films", response_model=IngestResponse)
+def admin_ingest_films(req: IngestRequest):
+    """Plug-and-Play Ingest — accepts customer films, extracts DNA, indexes.
+
+    Typical customer flow:
+      1. POST a batch of films (≤200 per call).
+      2. Server extracts DNA via configured LLM and appends to JSONL.
+      3. If `do_index=true`, server builds vectors and upserts to Qdrant.
+      4. Client batches the next chunk.
+
+    For 50K+ films, the customer is expected to call this endpoint multiple
+    times (≤200/call). Synchronous to keep the contract simple; future async
+    variant would return job IDs.
+    """
+    t0 = time.time()
+    if not req.films:
+        raise HTTPException(400, "films list is empty")
+    if len(req.films) > _INGEST_MAX_PER_CALL:
+        raise HTTPException(413, f"Max {_INGEST_MAX_PER_CALL} films per call. "
+                                  f"Got {len(req.films)} — please batch.")
+
+    seen = _existing_tmdb_ids() if req.skip_existing else set()
+    todo = [f for f in req.films if f.tmdb_id not in seen and f.overview]
+    skipped = len(req.films) - len(todo)
+
+    if not todo:
+        return IngestResponse(
+            status="nothing_to_do", received=len(req.films), extracted=0,
+            indexed=0, skipped_existing=skipped, errors=[],
+            elapsed_ms=int((time.time() - t0) * 1000),
+        )
+
+    # Decide LLM caller
+    use_local = LOCAL_LLM_ENABLED if req.use_local_llm is None else req.use_local_llm
+    from scripts.extract_dna_v3 import extract_one, call_openai, call_local
+    caller = call_local if use_local else call_openai
+    log.info(f"admin_ingest_films: {len(todo)} films, llm={'local' if use_local else 'openai'}")
+
+    # Extract DNA
+    records: List[Dict[str, Any]] = []
+    errors: List[Dict[str, Any]] = []
+    for f in todo:
+        try:
+            film_dict = f.model_dump(exclude_none=True)
+            rec = extract_one(film_dict, SYSTEM_PROMPT, ONT, caller=caller)
+            records.append(rec)
+        except Exception as e:
+            errors.append({"tmdb_id": f.tmdb_id, "title": f.title,
+                           "error": f"{type(e).__name__}: {str(e)[:200]}"})
+
+    # Append to JSONL for future reindex/audit
+    jsonl_path = ROOT / "data" / "movies_dna_v3.jsonl"
+    jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(jsonl_path, "a") as f_out:
+        for rec in records:
+            f_out.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+    # Optional: upsert to Qdrant immediately
+    indexed = 0
+    if req.do_index and records:
+        try:
+            from scripts.reindex_v3 import upsert_films, load_ontology_indices
+            emo_idx, th_idx = load_ontology_indices()
+            # Build the meta-list in the same order as records
+            rec_ids = {r["tmdb_id"] for r in records}
+            films_meta = [f.model_dump(exclude_none=True) for f in req.films
+                          if f.tmdb_id in rec_ids]
+            dna_by_id = {r["tmdb_id"]: r for r in records}
+            indexed = upsert_films(QDRANT, films_meta, dna_by_id, emo_idx, th_idx)
+            # Refresh in-memory TITLE_INDEX so newly-indexed films become
+            # resolvable via _find_film_by_title without API restart.
+            for m in films_meta:
+                title = m.get("title")
+                if title:
+                    TITLE_INDEX[title.lower()] = m["tmdb_id"]
+                ot = m.get("original_title")
+                if ot:
+                    TITLE_INDEX[ot.lower()] = m["tmdb_id"]
+                TITLE_PAYLOADS[m["tmdb_id"]] = {"title": title, "original_title": ot}
+        except Exception as e:
+            errors.append({"phase": "index", "error": f"{type(e).__name__}: {e}"})
+
+    return IngestResponse(
+        status="ok" if not errors else "partial",
+        received=len(req.films),
+        extracted=len(records),
+        indexed=indexed,
+        skipped_existing=skipped,
+        errors=errors,
+        elapsed_ms=int((time.time() - t0) * 1000),
+    )
+
+
 @app.post("/api/admin/refresh-title-index")
 def refresh_title_index():
     """Rebuild the in-memory TITLE_INDEX from Qdrant.

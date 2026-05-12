@@ -144,6 +144,94 @@ def setup_collection(client: QdrantClient, recreate: bool):
           f"({len(cf_indexes)} content_features keys).")
 
 
+def _embedder():
+    """Singleton SentenceTransformer for E5. Device picked via pick_torch_device()."""
+    if not hasattr(_embedder, "_model"):
+        from scripts.search_v3 import pick_torch_device
+        from sentence_transformers import SentenceTransformer
+        device = pick_torch_device()
+        _embedder._model = SentenceTransformer(EMBEDDING_MODEL, device=device)
+        _embedder._device = device
+    return _embedder._model
+
+
+def upsert_films(client: QdrantClient,
+                 films_meta: List[Dict[str, Any]],
+                 dna_records: Dict[int, Dict[str, Any]],
+                 emotion_to_idx: Dict[str, int],
+                 theme_to_idx: Dict[str, int]) -> int:
+    """Build vectors + payload for the given films and upsert into Qdrant.
+
+    Extracted from main() so the api_v3 admin endpoint can reuse it (audit
+    Block B: plug-and-play ingest).
+
+    Args:
+        client:       QdrantClient
+        films_meta:   list of full film metadata dicts (title, year, overview, …)
+        dna_records:  {tmdb_id: {"dna_v3": {...}}} — output of extract_one wrapped
+        emotion_to_idx, theme_to_idx: layout (from load_ontology_indices())
+
+    Returns: number of points upserted.
+    """
+    model = _embedder()
+    texts = [make_synopsis_text(m) for m in films_meta]
+    emb = model.encode(texts, batch_size=32, convert_to_numpy=True,
+                       normalize_embeddings=True, show_progress_bar=False)
+    points: List[PointStruct] = []
+    for i, m in enumerate(films_meta):
+        tid = m["tmdb_id"]
+        d = (dna_records.get(tid) or {}).get("dna_v3", {})
+        payload = {
+            "tmdb_id": tid,
+            "title": m.get("title"),
+            "original_title": m.get("original_title"),
+            "year": m.get("year") or (m.get("release_date", "")[:4] or None),
+            "overview": (m.get("overview") or "")[:500],
+            "keywords": (m.get("keywords") or [])[:20],
+            "director": m.get("director"),
+            "cast": (m.get("cast") or [])[:5],
+            "runtime": m.get("runtime") or 0,
+            "vote_count": m.get("vote_count") or 0,
+            "vote_average": float(m.get("vote_average") or 0.0),
+            "popularity": float(m.get("popularity") or 0.0),
+            "release_date": m.get("release_date") or "",
+            "genres": m.get("genres") or [],
+            "streaming_providers": m.get("streaming_providers") or [],
+            "setting": d.get("setting", {}),
+            "archetype": d.get("archetype"),
+            "mood": d.get("mood", {}),
+            "pacing": d.get("pacing", {}),
+            "subjects": d.get("subjects", {}),
+            "content_features": d.get("content_features", {}),
+            "protagonist_gender": d.get("protagonist_gender"),
+            "emotion_dna": d.get("emotion_sparse", {}),
+            "theme_dna": d.get("theme_sparse", {}),
+            "indexed_at_v3": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        try:
+            year_int = int(payload["year"]) if payload["year"] else None
+        except (TypeError, ValueError):
+            year_int = None
+        payload["year"] = year_int
+
+        combined_theme = {
+            **(d.get("theme_sparse") or {}),
+            **(d.get("setting") or {}),
+            **(d.get("mood") or {}),
+            **(d.get("pacing") or {}),
+            **(d.get("subjects") or {}),
+        }
+        vectors = {
+            "synopsis_dense": emb[i].tolist(),
+            "emotion_sparse": to_sparse(d.get("emotion_sparse", {}), emotion_to_idx),
+            "theme_sparse":   to_sparse(combined_theme, theme_to_idx),
+        }
+        points.append(PointStruct(id=tid, vector=vectors, payload=payload))
+
+    client.upsert(collection_name=COLLECTION, points=points, wait=True)
+    return len(points)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--recreate", action="store_true", help="drop existing collection")
