@@ -57,9 +57,11 @@ Hier stehen kanonische Architektur-Entscheidungen mit Begründung. Wenn etwas ge
 
 **Status:** locked. Verletzung dieser Regel = Index-Bruch.
 
-## ⚠️ NOTE on D-005 (Audit 2026-05-12)
+## ✅ NOTE on D-005 (Audit 2026-05-12, repair pass 2026-05-12)
 
-**Korrektur durch Audit CMR-002:** Die Behauptung „graceful no-op für alte Filme" ist **derzeit nicht in Wirkung**, weil `_filter_to_dict` (search_v3.py:150-170) das `must_not`-Feld silent droppt. Solange dieser Bug (F-001) nicht gefixt ist, ist content_features-Avoid **komplett deaktiviert** — egal welcher Film extrahiert ist. Die Decision selbst bleibt korrekt; die Umsetzung ist gebrochen. Erst nach F-001-Fix gilt D-005 wieder.
+**F-001 gefixt 2026-05-12** (commit 38dbeb4) — `_filter_to_dict` serialisiert jetzt must / must_not / should. D-005 funktioniert wieder wie spezifiziert. Empirisch via Qdrant verifiziert: must_not erreicht die Engine.
+
+**Korpus-Limitation bleibt:** Alte 7K Filme haben kein `content_features`-Feld im Payload, der must_not-Filter wirkt für sie als no-op (graceful). Volle Wirkung erst nach Reindex der neuen Qwen-Filme mit content_features-Daten.
 
 ## D-005 Content-Features als Payload-Only
 

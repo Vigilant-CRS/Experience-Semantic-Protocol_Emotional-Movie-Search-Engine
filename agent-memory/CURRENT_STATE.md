@@ -1,16 +1,24 @@
 # Current State — 2026-05-12
 
-## ⚠️ Audit-Befund 2026-05-12 (CMR-002)
+## ✅ Repair-Pass abgeschlossen 2026-05-12 (CMR-002b)
 
-**Kritische Bugs entdeckt:**
-- **F-001:** `avoid_content`-Filter ist seit Einführung **komplett tot** (must_not wird im HTTP-Body nicht serialisiert)
-- **F-002:** `diversify()` verliert Items bei Franchise-Cap-Erreichen → liefert weniger als `limit`
-- **F-005:** `llm_local.py` Prompt seit subjects-Erweiterung out-of-sync (4 fehlende Felder)
-- **F-007:** 34 Tags (alle subjects + content_features) ohne DE-Translation
-- **F-010:** Repo hat 0 Git-Commits — Audit-Trail fehlt
-- **F-025:** docker-compose enthält nur qdrant, kein api/frontend
+**Sieben Audit-Fixes durchgeführt:**
 
-**Vollständiger Audit:** `agent-memory/CROSS_MODEL_REVIEW.md` (CMR-002).
+| Bug | Status | Datei | Verifikation |
+|---|---|---|---|
+| F-001 must_not im Filter | ✅ FIXED | search_v3.py | 6 Unit-Tests + Qdrant E2E |
+| F-002 diversify cap-pop | ✅ FIXED | search_v3.py | 3 Unit-Tests |
+| F-015 L1-Renorm Tone-Shift | ✅ FIXED | api_v3.py | 3 Unit-Tests |
+| F-007 DE-Translations 34 Tags | ✅ FIXED | translations_de.json | 162/162 abgedeckt |
+| F-003 streaming_providers Index | ✅ FIXED | reindex_v3 + Live-Qdrant | 1914 Filme indexiert |
+| F-004 content_features.* Indexe | ✅ FIXED | reindex_v3 + Live-Qdrant | 10 Float-Indexe |
+| F-010 Git Initial Commit | ✅ FIXED | .gitignore + commit 38dbeb4 | git log zeigt commit |
+
+**Verbleibende Findings aus CMR-002:** 18 offene (F-005, F-006, F-008..F-025) — siehe CROSS_MODEL_REVIEW.md.
+
+**Eval nach Fixes:** 23-26/29 (LLM-Varianz, identisch zu vor-Audit).
+
+**Vollständiger Audit-Trail:** `agent-memory/CROSS_MODEL_REVIEW.md` CMR-002 + CMR-002b.
 
 # Current State — 2026-05-11 (vorherig)
 

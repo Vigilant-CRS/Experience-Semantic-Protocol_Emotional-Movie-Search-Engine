@@ -1,20 +1,21 @@
 """
-Expanded Quality-Eval-Suite for MindRead V3.
+⚠️  DEPRECATED — kept for reference only.
 
-50+ test cases organized by category:
-  - Reference-based:  similar_to, similar_to_title resolution
-  - Genre/Mood:        plain genre searches
-  - Activity-context:  "zum Einschlafen", "Familienabend", ...
-  - Modifier-queries:  "wie X aber Y"
-  - Avoid-filters:     "ohne Splatter", "kein Horror"
-  - Edge-cases:        single-word, very short query
-  - Semantic checks:   results must have X tag at >Y weight (no exact film names needed)
-  - Latency budget:    each test asserts latency cap
+This file is the *original* expanded eval set (41 test cases in 6 categories).
+It is NOT executed by any CI/automation. The active eval suite is
+`scripts/eval_v3.py` (29 tests, mostly disjoint).
 
-Usage:
-  venv/bin/python3 scripts/eval_v3_expanded.py
-  venv/bin/python3 scripts/eval_v3_expanded.py --category similar_to
-  venv/bin/python3 scripts/eval_v3_expanded.py --json data/eval_v3_expanded.json
+Audit 2026-05-12 (F-008): this file contains test-case ideas that are NOT in
+the active suite — particularly category-organized tests and property-tests
+(see DISPUTED_POINTS DP-006). When the active suite is refactored toward
+property-based testing, these 41 cases are the source pool.
+
+DO NOT extend this file. Add new tests to `eval_v3.py` instead.
+
+Original docstring:
+  Expanded Quality-Eval-Suite for MindRead V3 — 50+ test cases organized by
+  category: Reference-based, Genre/Mood, Activity-context, Modifier-queries,
+  Avoid-filters, Edge-cases, Semantic checks, Latency budget.
 """
 import argparse
 import json

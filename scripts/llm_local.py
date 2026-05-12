@@ -69,37 +69,18 @@ def chat_complete(system: str, user: str, max_tokens: int = 1500,
 
 def llm_query_to_dna_local(query: str, system_prompt: str,
                             ontology: Dict[str, Any]) -> Dict[str, Any]:
-    """Drop-in replacement for the OpenAI llm_query_to_dna in api_v3."""
+    """Drop-in replacement for the OpenAI llm_query_to_dna in api_v3.
+
+    Uses the canonical `build_query_user_prompt` + `parse_query_dna` from
+    extract_dna_v3.py, so this local-LLM path stays in sync with the OpenAI
+    path automatically (audit F-005 + F-006).
+    """
     sys.path.insert(0, str(ROOT))
-    from scripts.extract_dna_v3 import normalize_dna
-    user = f"""The user query (search request, not film description):
-"{query}"
-
-Extract the DNA schema as if this were a film description, representing what the
-user WANTS to see/feel. 2-5 tags per block, weights reflect priority. If the user says
-"without X" or "ohne X", do NOT include those tags but list them in
-"avoid_emotions" and "avoid_themes" arrays. Return strict JSON.
-
-For ambiguous genre/style words, map aggressively to canonical tags:
-  - "cyberpunk" → Action, Science Fiction, identity_crisis, dystopian themes
-  - "noir"      → noir mood, mystery_investigation, dark atmosphere
-  - "feel-good" → comforting, inspiring, joy, light mood
-  - "tearjerker"→ grief, bittersweet, sadness
-
-Additional fields:
-  "translated_query": "<English translation of the user's query>"
-  "avoid_emotions": [tag, ...]
-  "avoid_themes":   [tag, ...]
-  "similar_to_title": null | "Film Title in ENGLISH original"
-"""
+    from scripts.extract_dna_v3 import build_query_user_prompt, parse_query_dna
+    user = build_query_user_prompt(query)
     text = chat_complete(system_prompt, user, max_tokens=1500, temperature=0.1)
     raw = json.loads(text)
-    dna = normalize_dna(raw, ontology)
-    dna["avoid_emotions"] = [t for t in (raw.get("avoid_emotions") or []) if isinstance(t, str)]
-    dna["avoid_themes"] = [t for t in (raw.get("avoid_themes") or []) if isinstance(t, str)]
-    dna["similar_to_title"] = raw.get("similar_to_title")
-    dna["translated_query"] = raw.get("translated_query") or query
-    return dna
+    return parse_query_dna(raw, query, ontology)
 
 
 # ─── Speed test ───────────────────────────────────────────────────────────

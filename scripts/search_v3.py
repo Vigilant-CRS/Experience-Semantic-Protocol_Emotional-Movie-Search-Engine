@@ -84,33 +84,25 @@ def to_sparse(weights: Dict[str, float], tag_to_idx: Dict[str, int]) -> SparseVe
     return SparseVector(indices=indices, values=values)
 
 
-# Free-text → DNA via LLM (uses same prompt as DNA extractor, slightly adapted for queries)
+# Free-text → DNA via LLM — thin shim that delegates to the canonical builders
+# in extract_dna_v3.py.  Used only by the CLI in this module's `main()` for
+# debugging.  Production traffic goes through api_v3.llm_query_to_dna which
+# uses the same canonical helpers (audit F-006).
 def llm_query_to_dna(query: str) -> Dict[str, Any]:
-    """Extract DNA-like dict from free-text query. Returns same schema as film DNA."""
-    sys.path.insert(0, str(ROOT))
-    from scripts.extract_dna_v3 import build_system_prompt, load_ontology, normalize_dna, call_openai
+    """Extract DNA-like dict from free-text query (CLI debug path).
 
+    Delegates to scripts/extract_dna_v3 canonical prompt-builder + parser.
+    """
+    sys.path.insert(0, str(ROOT))
+    from scripts.extract_dna_v3 import (
+        build_system_prompt, load_ontology, call_openai,
+        build_query_user_prompt, parse_query_dna,
+    )
     ont = load_ontology()
     system = build_system_prompt(ont)
-    user = f"""The user query (treat as a search request, not a film description):
-"{query}"
-
-Extract the same DNA schema as if this were a movie description. The DNA represents
-what the user WANTS to see/feel. Use 2-5 tags per block, distribute weights to reflect priority.
-If the user says "without X" or "ohne X", DO NOT include those tags but list them in
-"avoid_emotions" and "avoid_themes" arrays. Return strict JSON.
-
-Additional fields to include:
-  "avoid_emotions": [tag, ...]
-  "avoid_themes":   [tag, ...]
-  "similar_to_title": null | "Film Title"  (if user says "wie X" / "like X")
-"""
+    user = build_query_user_prompt(query)
     raw = call_openai(system, user)
-    dna = normalize_dna(raw, ont)
-    dna["avoid_emotions"] = [t for t in (raw.get("avoid_emotions") or []) if isinstance(t, str)]
-    dna["avoid_themes"] = [t for t in (raw.get("avoid_themes") or []) if isinstance(t, str)]
-    dna["similar_to_title"] = raw.get("similar_to_title")
-    return dna
+    return parse_query_dna(raw, query, ont)
 
 
 def build_filter(genres: Optional[List[str]],

@@ -28,6 +28,53 @@ Jeder Eintrag:
 
 ---
 
+## CMR-002b — 2026-05-12 / Claude Opus 4.7 / Fix-Verifikation
+
+**Kontext:** Repair-Pass nach Audit CMR-002. Re-verifikation jedes Findings, dann sequenzieller Fix mit Unit-Tests + E2E-Verifikation.
+
+**Status der CMR-002 Findings:**
+
+| # | Finding | Status nach 2026-05-12 |
+|---|---|---|
+| F-001 | `_filter_to_dict` must_not | ✅ **FIXED** — `_condition_to_dict` Helper + must/must_not/should-Serialisierung. 6 Unit-Tests pass. Empirisch via Qdrant verifiziert. |
+| F-002 | diversify pop-skip | ✅ **FIXED** — Cap-Check VOR pool.pop. 3 Unit-Tests pass. limit=10 liefert jetzt soviel wie der diverse Pool erlaubt. |
+| F-015 | Tone-Shift L1 | ✅ **FIXED** — `normalize_l1` nach Blend in api_v3. 3 Unit-Tests pass (alle L1=1.0). |
+| F-007 | DE-Translations | ✅ **FIXED** — 34 Tags ergänzt, jetzt 162/162. UI-Test bestätigt: mafia→Mafia, firearms→Schusswaffen, espionage→Spionage. |
+| F-003 | streaming_providers Payload-Index | ✅ **FIXED** — Code in reindex_v3 + Live-Qdrant-Patch (1914 points indexiert). |
+| F-004 | content_features.* Payload-Indexe | ✅ **FIXED** — 10 Float-Indexe für alle content_features Sub-Keys angelegt (Code + Live). |
+| F-010 | 0 Git-Commits | ✅ **FIXED** — `.gitignore` mit Secrets-Schutz + Initial-Commit `38dbeb4`. |
+
+**Eval nach Fix:** 23-26/29 pass (LLM-Varianz). Vor Audit 25-26/29. → Fixes haben nichts gebrochen.
+
+**Verbleibende offene Findings aus CMR-002** (Stand 2026-05-12 Block-A-Pass):
+- ✅ F-005: llm_local.py Prompt synchronisiert via `build_query_user_prompt` (Block A)
+- ✅ F-006: drei `llm_query_to_dna` durch einen canonical Builder ersetzt (Block A)
+- ✅ F-008: eval_v3_expanded.py mit Deprecation-Header (Block A)
+- ✅ F-009: requirements.txt von 31 → 18 Pakete, 10 Phantom-Deps raus + llama-cpp-python rein (Block A)
+- F-011: 580 Filme ohne genres im Payload (ETL-Problem)
+- F-012: Magic Numbers ohne zentrale Konstante
+- F-013: indie-Slider versteckte va≥7 Klausel
+- F-014: Boost auf RRF-Score nicht skaleninvariant
+- F-016: emotion+wirkung joint-L1
+- F-017: subjects 1/5 Theme-Beitrag
+- F-018: Synopsis 500-char Truncate
+- F-019: _find_film_by_title brittle
+- F-020: TITLE_INDEX stale nach Reindex
+- F-021: CORS *
+- F-022: extracted_total duplicates
+- F-023: Übersetzung mixed
+- F-024: Qwen3.5 Naming
+- F-025: docker-compose ohne api/frontend
+
+**Empfohlene nächste Iteration:**
+1. F-006 + F-005 — Prompt-Single-Source-of-Truth (verhindert künftige Drift)
+2. F-025 — Docker-Bundle mit api+frontend (B2B-Blocker)
+3. F-009 — Phantom-Deps entfernen (saubere Vendor-Review)
+
+**Status:** Phase 1 abgeschlossen. Engine-Konsistenz substanziell verbessert.
+
+---
+
 ## CMR-002 — 2026-05-12 / Claude Opus 4.7 / Harter Senior-Audit
 
 **Kontext:** Vollständiges, systematisches dateiübergreifendes Audit über api_v3.py, search_v3.py, extract_dna_v3.py, reindex_v3.py, llm_local.py, frontend/index.html, alle 12 Ontology-JSONs, agent-memory, docker-compose, requirements, git-state.

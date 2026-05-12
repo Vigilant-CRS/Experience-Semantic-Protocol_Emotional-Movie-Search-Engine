@@ -1,16 +1,40 @@
-# Session Handoff — 2026-05-12
+# Session Handoff — 2026-05-12 (Repair-Pass)
 
-## CRITICAL — sofort vor allen anderen Arbeiten
+## ✅ Audit-Fixes durch — Block A komplett (commit 38dbeb4 + Block A)
 
-**F-001 fixen** (10 min): `scripts/search_v3.py::_filter_to_dict` muss `must_not` und `should` serialisieren, sonst ist avoid_content-Filter komplett tot. Audit CMR-002 hat Bug empirisch verifiziert. Fix-Skizze siehe `CROSS_MODEL_REVIEW.md`.
+**Initial Commit 38dbeb4** mit F-001, F-002, F-015, F-007, F-003, F-004, F-010.
 
-**F-002 fixen** (15 min): `scripts/search_v3.py::diversify` Zeile 358-364 — Cap-Check vor pool.pop, sonst verschwinden Items.
+**Block A (2026-05-12 später):**
+- ✅ F-005 + F-006: `build_query_user_prompt` + `parse_query_dna` in extract_dna_v3.py als Single-Source-of-Truth. api_v3, llm_local und search_v3 CLI nutzen jetzt alle dieselbe Logik.
+- ✅ F-008: eval_v3_expanded.py mit Deprecation-Header (41 Test-Ideen als Future-Merge-Pool erhalten)
+- ✅ F-009: requirements.txt entschlackt von 31 → 18 Pakete. Phantom-Deps weg: mistralai, streamlit, redis, aiohttp, plotly, aiofiles, tenacity, pandas, python-dotenv, pyyaml, python-multipart, httpx, pytest-asyncio, ipython. llama-cpp-python ergänzt (war nicht deklariert).
 
-**F-007 fixen** (30 min): `config/ontology_v3/translations_de.json` um 34 Tags ergänzen (10 content_features + 24 subjects).
+Details in `CROSS_MODEL_REVIEW.md` CMR-002b.
 
-**F-010 erfüllen** (5 min): Repo hat 0 Commits — `git add -A && git commit -m "initial: V3 baseline post-audit"`.
+## Was als nächstes ansteht
 
-Nach diesen vier sind die kritischsten Audit-Findings entschärft.
+**Block A — verbliebene Konsistenz-Findings (✅ COMPLETE)**
+
+**Block B — B2B-Produkt-Infrastruktur (2-3 Tage):**
+- F-025: docker-compose mit api+frontend (1-Command-Deploy)
+- `POST /api/admin/films` Plug-and-Play Ingest-Endpoint
+- Auth + API-Keys für Tenant-Isolation
+
+**Block C — Korpus konsolidieren ($22, 4h):**
+- OpenAI-Re-Extract der 10K fehlenden Filme
+- OpenAI-Re-Extract der alten 7K für volle Ontologie-Konsistenz
+- Reindex mit den neuen Payload-Indexes (F-003+F-004 schon in setup_collection)
+- TMDB-Enrichment-Chain
+
+**Block D — Theorie-Verbesserungen (low priority):**
+- F-016: emotion/wirkung separate L1
+- F-017: Subject-Channel-Gewichtung
+- F-014: Boost-Skala-Invarianz
+- F-013: Indie-Slider va≥7-Asymmetrie
+- F-018: Synopsis 500-char Truncate
+- F-022: Dedupe JSONL für extracted_total
+
+# Session Handoff — 2026-05-12 (vorherig — pre-Repair)
 
 # Session Handoff — 2026-05-11 (vorherig)
 

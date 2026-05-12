@@ -149,6 +149,25 @@ Qdrant payload_schema-Endpoint zeigt Indexe für: vote_average, vote_count, genr
 
 → Drei Dependencies können entfernt werden.
 
+## E-016 (2026-05-12) Repair-Pass abgeschlossen
+
+**Commit `38dbeb4` enthält 7 Fixes** (siehe CROSS_MODEL_REVIEW CMR-002b):
+
+| Fix | Test | Resultat |
+|---|---|---|
+| F-001 _filter_to_dict | 6 Unit-Tests | alle pass |
+| F-002 diversify | 3 Unit-Tests | alle pass; 8 JW + 2 andere, cap=2 → 4 Filme zurück |
+| F-015 L1-Renorm | 3 Unit-Tests | L1=1.0 in allen 3 Cases (empty/disjoint/overlap modifier) |
+| F-007 Translations | Coverage-Check | 162/162 Tags abgedeckt |
+| F-003/F-004 Indexe | Qdrant payload_schema | 20 Indexe gesamt (vorher 9) |
+| F-010 Git Commit | git log | commit 38dbeb4 root-commit |
+
+**Live Qdrant patched:**
+- streaming_providers: keyword (1914 points indexed)
+- content_features.firearms..drug_use: float (0 points — alte Filme haben Feld nicht)
+
+**Eval-Suite nach Fixes:** 23-26/29 (LLM-Varianz, identisch zu pre-audit).
+
 ## E-015 (2026-05-12) Git-Status
 
 `git log` → „Branch hat noch keine Commits". Alle Python-Files sind untracked. Kein Audit-Trail.

@@ -155,6 +155,119 @@ OUTPUT:
 """
 
 
+def build_query_user_prompt(query: str) -> str:
+    """Canonical user-prompt for free-text QUERY extraction.
+
+    Single source of truth — used by api_v3.py (OpenAI runtime),
+    scripts/llm_local.py (Qwen runtime) and scripts/search_v3.py CLI.
+    Keeping this function in one place prevents the drift we had between
+    three divergent prompt copies (audit F-006).
+    """
+    return f"""The user query (search request, not film description):
+"{query}"
+
+Extract the same DNA schema as if this were a film description, representing what the
+user WANTS to see/feel. 2-5 tags per block, weights reflect priority. If the user says
+"without X" or "ohne X", do NOT include those tags but list them in
+"avoid_emotions" and "avoid_themes" arrays. Return strict JSON.
+
+For ambiguous genre/style words, map aggressively to canonical tags:
+  - "cyberpunk" → Action, Science Fiction, identity_crisis, dystopian themes
+  - "noir"      → noir mood, mystery_investigation, dark atmosphere
+  - "feel-good" → comforting, inspiring, joy, light mood
+  - "tearjerker"→ grief, bittersweet, sadness
+
+For subject queries, fill the "subjects" block with the matching canonical tag(s) from
+the SUBJECTS bucket above. This is the strongest signal for "give me films ABOUT X":
+  - "Mafiafilme" / "Gangsterfilme" → subjects={{"mafia": 1.0}}
+  - "Vampirfilme" → subjects={{"vampire": 1.0}}
+  - "Spionagefilme" → subjects={{"espionage": 1.0}}
+  - "Kampfsportfilme" → subjects={{"martial_arts": 1.0}}
+  - "Sportfilme" → subjects={{"sports": 1.0}}
+  - "Knastfilme" / "prison" → subjects={{"prison_life": 1.0}}
+  - "Anime" → subjects={{"anime": 1.0}}
+  - "Found-Footage Horror" → subjects={{"found_footage": 0.6}}, themes={{"Horror": 0.4}}
+  - "Biopic über Musiker" → subjects={{"biopic": 0.6, "music_performance": 0.4}}
+
+CRITICAL — "wie X aber Y" / "like X but Y" handling:
+  When the user references a film AND a transformation ("aber X", "but with X",
+  "nur X", "more X", "less X"), the emotions/themes you output must reflect ONLY
+  the SHIFT/MODIFIER, NOT the reference film's DNA. The reference film's full DNA
+  will be loaded separately from `similar_to_title`. Your job is to encode the DELTA.
+
+  Examples:
+   - "Filme wie Amélie aber mit mehr Action" → similar_to_title="Amélie",
+     emotions={{excitement: 0.5, anticipation: 0.5}}, themes={{Action: 0.7, Adventure: 0.3}}
+     (do NOT include joy/wonder/Amélie tags — they come from the reference)
+   - "John Wick aber lustiger" → similar_to_title="John Wick",
+     emotions={{joy: 0.5, amusement: 0.5}}, themes={{Comedy: 1.0}}
+   - "Inception aber emotional" → similar_to_title="Inception",
+     emotions={{grief: 0.4, tenderness: 0.4, melancholy: 0.2}}, themes={{}}
+
+Additional fields:
+  "translated_query": "<English translation of the user's query>"
+                      ALWAYS provide a fluent English translation. If the user wrote
+                      English, copy it verbatim. This is used for semantic search.
+  "avoid_emotions": [tag, ...]
+  "avoid_themes":   [tag, ...]
+  "avoid_content":  [tag, ...]   // content features to avoid: firearms, bladed_weapons,
+                                 // physical_combat, explosions, supernatural_combat,
+                                 // vehicular_combat, graphic_violence, torture,
+                                 // sexual_content, drug_use.
+                                 // Trigger phrases:
+                                 //  - "ohne Schusswaffen" / "no guns" → ["firearms"]
+                                 //  - "ohne Waffen" / "no weapons" → ["firearms","bladed_weapons"]
+                                 //  - "kein Kampf" / "no fighting" → ["firearms","bladed_weapons","physical_combat"]
+                                 //  - "ohne Gewalt" / "no violence" → ["graphic_violence","torture"]
+                                 //  - "kindgeeignet" / "for kids" → ["graphic_violence","torture","sexual_content","drug_use"]
+                                 // Use [] (empty) if no avoidance phrase. Only canonical tags.
+  "similar_to_title": null | "Film Title in ENGLISH original"  (if user says "wie X" / "like X")
+                     ALWAYS use the English/original-language title, never the German one.
+                     Examples: "Im Auftrag des Teufels" → "The Devil's Advocate"
+                              "Der Pate" → "The Godfather"
+                              "Stirb langsam" → "Die Hard"
+  "protagonist_gender": null | "male" | "female" | "ensemble" | "non_binary"
+                       Set when the user explicitly demands a protagonist gender:
+                        - "weibliche Hauptrolle", "starke Frau", "female lead" → "female"
+                        - "männlicher Held", "male lead" → "male"
+                        - "Ensemble-Cast", "Gruppe" → "ensemble"
+                       Otherwise null. Do NOT infer from genre alone.
+  "year_min": null | number   (4-digit year, inclusive)
+  "year_max": null | number   (4-digit year, inclusive)
+                  Set when the user mentions an era/decade. Examples:
+                   - "80er Filme" / "1980s" → year_min=1980, year_max=1989
+                   - "90er Liebeskomödie" → year_min=1990, year_max=1999
+                   - "neue Filme" / "recent" → year_min=2020 (no max)
+                   - "Klassiker" / "classics" → year_max=1980 (no min)
+                  Otherwise null/null.
+"""
+
+
+def parse_query_dna(raw: Dict[str, Any], query: str, ont: Dict[str, Any],
+                    content_features_tags: Optional[set] = None) -> Dict[str, Any]:
+    """Canonical post-processing of LLM query output.
+
+    Single source of truth (audit F-006). Extracts/validates all metadata fields
+    the engine needs: avoid_*, similar_to_title, protagonist_gender, year_min/max,
+    translated_query.
+    """
+    if content_features_tags is None:
+        content_features_tags = set(ont.get("content_features", []))
+    dna = normalize_dna(raw, ont)
+    dna["avoid_emotions"] = [t for t in (raw.get("avoid_emotions") or []) if isinstance(t, str)]
+    dna["avoid_themes"] = [t for t in (raw.get("avoid_themes") or []) if isinstance(t, str)]
+    dna["avoid_content"] = [t for t in (raw.get("avoid_content") or [])
+                             if isinstance(t, str) and t in content_features_tags]
+    dna["similar_to_title"] = raw.get("similar_to_title")
+    dna["translated_query"] = raw.get("translated_query") or query
+    pg = (raw.get("protagonist_gender") or "").lower() or None
+    dna["protagonist_gender"] = pg if pg in {"male", "female", "ensemble", "non_binary"} else None
+    ymin, ymax = raw.get("year_min"), raw.get("year_max")
+    dna["year_min"] = int(ymin) if isinstance(ymin, (int, float)) and 1900 <= int(ymin) <= 2100 else None
+    dna["year_max"] = int(ymax) if isinstance(ymax, (int, float)) and 1900 <= int(ymax) <= 2100 else None
+    return dna
+
+
 def build_user_prompt(film: Dict[str, Any]) -> str:
     title = film.get("title") or film.get("original_title") or "?"
     year = film.get("year") or (film.get("release_date", "")[:4] or "?")
