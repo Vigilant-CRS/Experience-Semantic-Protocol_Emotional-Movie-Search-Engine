@@ -42,6 +42,35 @@ ONT_DIR = ROOT / "config" / "ontology_v3"
 COLLECTION = os.getenv("QDRANT_COLLECTION_V3", "mindread_v3")
 
 
+def _load_engine_params() -> Dict[str, Any]:
+    """Read config/engine_params.yaml once at import. Customer-tunable knobs."""
+    cfg_path = ROOT / "config" / "engine_params.yaml"
+    if not cfg_path.exists():
+        return {}
+    try:
+        import yaml
+        return yaml.safe_load(open(cfg_path)) or {}
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(
+            f"engine_params.yaml exists but failed to load ({e}); using built-in defaults")
+        return {}
+
+
+ENGINE_PARAMS = _load_engine_params()
+
+
+def _ep(*path: str, default: Any) -> Any:
+    """Safe nested lookup in ENGINE_PARAMS; returns `default` on any miss."""
+    cur: Any = ENGINE_PARAMS
+    for k in path:
+        if isinstance(cur, dict) and k in cur:
+            cur = cur[k]
+        else:
+            return default
+    return cur
+
+
 def load_env():
     env = ROOT / ".env"
     if env.exists():
@@ -129,12 +158,48 @@ def build_filter(genres: Optional[List[str]],
     return Filter(must=must) if must else None
 
 
+def pick_torch_device() -> str:
+    """Auto-detect device for sentence-transformers.
+
+    Modes via env `EMBEDDING_DEVICE`:
+      - "auto" (default): cuda if available AND compute-capability >= sm_70, else cpu
+      - "cuda": force GPU (errors out if no CUDA)
+      - "cpu":  force CPU
+
+    The sm_70 cutoff matches modern PyTorch builds (sm_61 / Quadro P620 etc.
+    raise warnings and fall back to CPU silently — better to be explicit).
+    """
+    mode = (os.getenv("EMBEDDING_DEVICE") or "auto").lower()
+    if mode == "cpu":
+        return "cpu"
+    if mode == "cuda":
+        return "cuda"
+    # auto
+    try:
+        import torch
+        import warnings
+        # Suppress PyTorch's sm_61-warning during the capability probe — we
+        # explicitly detect and handle that case ourselves below.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            if not torch.cuda.is_available():
+                return "cpu"
+            major, minor = torch.cuda.get_device_capability(0)
+        if (major, minor) < (7, 0):
+            return "cpu"
+        return "cuda"
+    except Exception:
+        return "cpu"
+
+
 def encode_query_text(text: str) -> np.ndarray:
     from sentence_transformers import SentenceTransformer
     if not hasattr(encode_query_text, "_model"):
+        device = pick_torch_device()
         encode_query_text._model = SentenceTransformer(
             os.getenv("EMBEDDING_MODEL", "intfloat/e5-large-v2"),
-            device="cpu")
+            device=device)
+        encode_query_text._device = device
     return encode_query_text._model.encode(
         f"query: {text}", normalize_embeddings=True, convert_to_numpy=True)
 
@@ -199,12 +264,12 @@ def manual_weighted_fusion(client: QdrantClient,
                            filt: Optional[Filter],
                            limit: int = 30,
                            popularity_boost: float = 0.0,
-                           rrf_k: int = 60,
+                           rrf_k: Optional[int] = None,
                            avoid_emotions: Optional[List[str]] = None,
                            avoid_themes: Optional[List[str]] = None,
                            avoid_strict: bool = False,
-                           avoid_strict_threshold: float = 0.10,
-                           avoid_penalty: float = 0.5,
+                           avoid_strict_threshold: Optional[float] = None,
+                           avoid_penalty: Optional[float] = None,
                            diversify_results: bool = True,
                            similar_to_id: Optional[int] = None,
                            # ── personal/collab-filter channel ──
@@ -212,13 +277,25 @@ def manual_weighted_fusion(client: QdrantClient,
                            user_emotion_sparse: Optional[SparseVector] = None,
                            user_theme_sparse: Optional[SparseVector] = None,
                            w_personal: float = 0.0) -> List[Dict[str, Any]]:
-    """Weighted Reciprocal Rank Fusion (RRF).
+    """Weighted Reciprocal Rank Fusion (RRF) — extension of Cormack 2009.
+
     Score per film = Σ_channel weight × 1/(rrf_k + rank_in_channel).
-    Robust against score-scale differences between dense (cosine 0..1) and sparse (dot, unbounded).
-    Bigger over-fetch = better cross-channel coverage.
+    All scoring constants default to values in `config/engine_params.yaml`;
+    explicit kwargs override.
     """
+    if rrf_k is None:
+        rrf_k = int(_ep("fusion", "rrf_k", default=60))
+    if avoid_strict_threshold is None:
+        avoid_strict_threshold = float(_ep("avoid", "strict_threshold", default=0.10))
+    if avoid_penalty is None:
+        avoid_penalty = float(_ep("avoid", "soft_penalty_factor", default=0.5))
+    over_fetch_mult = int(_ep("retrieval", "over_fetch_multiplier", default=20))
+    soft_score_magnitude = float(_ep("avoid", "soft_score_magnitude", default=0.02))
+    popularity_scale = float(_ep("popularity_boost", "scale", default=0.01))
+    indie_min_va = float(_ep("popularity_boost", "indie_min_quality_va", default=7.0))
+
     merged: Dict[int, Dict[str, Any]] = {}
-    over = limit * 20  # over-fetch large enough that synopsis/emotion/theme top-N overlap
+    over = limit * over_fetch_mult
     filter_dict = _filter_to_dict(filt)
 
     def add(channel_name: str, hits: List[Dict[str, Any]], weight: float):
@@ -259,23 +336,25 @@ def manual_weighted_fusion(client: QdrantClient,
             hits = _query_one_channel("theme_sparse", sq, filter_dict, over)
             add("personal_th", hits, w_personal * 0.25)
 
-    # Popularity boost — scaled to RRF magnitude (~ 1/(k+rank) ≈ 0.016 for rank 1)
+    # Popularity boost — scaled to RRF magnitude (≈ 1/(k+rank) for rank 1).
+    # Asymmetry: mainstream boost (slider>0) applies to all films; indie boost
+    # (slider<0) is gated on vote_average ≥ indie_min_va to avoid surfacing
+    # obscure low-quality films. Both thresholds in engine_params.yaml.
     if popularity_boost != 0.0 and merged:
         pops = [(e["payload"].get("vote_count") or 0) for e in merged.values()]
         log_pops = [np.log1p(p) for p in pops]
         if log_pops:
             lp_min, lp_max = min(log_pops), max(log_pops)
             denom = max(lp_max - lp_min, 1e-6)
-            scale = 0.01  # similar magnitude as a top RRF contribution
             for e in merged.values():
                 lp = np.log1p(e["payload"].get("vote_count") or 0)
                 pop_norm = (lp - lp_min) / denom
                 if popularity_boost > 0:
-                    e["score"] += popularity_boost * scale * pop_norm
+                    e["score"] += popularity_boost * popularity_scale * pop_norm
                 else:
                     va = e["payload"].get("vote_average") or 0.0
-                    if va >= 7.0:
-                        e["score"] += abs(popularity_boost) * scale * (1 - pop_norm)
+                    if va >= indie_min_va:
+                        e["score"] += abs(popularity_boost) * popularity_scale * (1 - pop_norm)
 
     # ── Avoid handling ──────────────────────────────────────────────────
     avoid_emo_set = set((avoid_emotions or []))
@@ -294,7 +373,7 @@ def manual_weighted_fusion(client: QdrantClient,
                 continue  # drop
             if total_mass > 0:
                 # soft penalty proportional to mass on avoided tags
-                e["score"] -= avoid_penalty * total_mass * 0.02  # similar magnitude as RRF top score
+                e["score"] -= avoid_penalty * total_mass * soft_score_magnitude
                 e["avoided_mass"] = round(total_mass, 3)
             kept[fid] = e
         merged = kept
@@ -307,15 +386,22 @@ def manual_weighted_fusion(client: QdrantClient,
 
 def diversify(results: List[Dict[str, Any]], limit: int = 10,
               similar_to_id: Optional[int] = None,
-              max_per_franchise: int = 2,        # allow up to 2 per franchise
-              demotion_strength: float = 0.4) -> List[Dict[str, Any]]:
-    """
-    Demote sequels/franchise-mates already represented in the top-N.
+              max_per_franchise: Optional[int] = None,
+              demotion_strength: Optional[float] = None) -> List[Dict[str, Any]]:
+    """Demote sequels / franchise-mates already represented in the top-N.
 
-    Heuristic: extract a "franchise-key" from each title (everything before ':' or
-    a Roman numeral / sequel marker / volume number). After picking each result,
-    boost competitors with different keys so the next top spot tends to differ.
+    Heuristic: derive a 'franchise-key' from each title (everything before ':'
+    or a Roman-numeral / sequel-marker / volume-number suffix).  Iteratively
+    pick the best-score-adjusted-for-franchise-penalty.
+
+    Tuning constants default to `config/engine_params.yaml::diversify`.
     """
+    if max_per_franchise is None:
+        max_per_franchise = int(_ep("diversify", "max_per_franchise", default=2))
+    if demotion_strength is None:
+        demotion_strength = float(_ep("diversify", "demotion_strength", default=0.4))
+    ref_softening = float(_ep("diversify", "ref_franchise_softening", default=0.5))
+    ref_cap_multiplier = int(_ep("diversify", "ref_franchise_cap_multiplier", default=2))
     import re
     if not results:
         return []
@@ -343,8 +429,8 @@ def diversify(results: List[Dict[str, Any]], limit: int = 10,
     pool = list(results)
 
     def _cap_for(k: str) -> int:
-        # Reference franchise gets a doubled cap (user explicitly wanted "wie X" — give them sequels)
-        return max_per_franchise * 2 if k == ref_key else max_per_franchise
+        # Reference franchise gets a multiplied cap (user explicitly wanted "wie X" — give them sequels)
+        return max_per_franchise * ref_cap_multiplier if k == ref_key else max_per_franchise
 
     while pool and len(chosen) < limit:
         best_idx = -1
@@ -359,7 +445,7 @@ def diversify(results: List[Dict[str, Any]], limit: int = 10,
                 continue
             # Reference franchise gets softer demotion (user wants sequels of "their" film)
             if k == ref_key:
-                penalty = 0.5 * demotion_strength * count
+                penalty = ref_softening * demotion_strength * count
             else:
                 penalty = demotion_strength * count
             adj = r["score"] - penalty * max(r["score"], 0.001)

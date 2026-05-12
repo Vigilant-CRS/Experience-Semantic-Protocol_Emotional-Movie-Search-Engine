@@ -29,6 +29,9 @@ pydantic==2.7.4
 # Progress bars (used internally by sentence-transformers + qdrant)
 tqdm==4.66.4
 
+# Engine config (config/engine_params.yaml)
+pyyaml>=6.0
+
 # --- dev (optional) ---
 pytest==8.2.2
 black==24.3.0

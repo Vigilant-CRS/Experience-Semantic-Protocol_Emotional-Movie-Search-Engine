@@ -166,11 +166,14 @@ def main():
         print("Nothing to index.")
         return
 
-    # load embedding model (force CPU — GPU CUDA build mismatch on this host)
-    print(f"Loading {EMBEDDING_MODEL} on CPU ...")
-    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    # Load embedding model. Device picked by `pick_torch_device` honoring the
+    # EMBEDDING_DEVICE env var (auto|cuda|cpu). Old GPUs (sm_<70) fall back to
+    # CPU automatically.
+    from scripts.search_v3 import pick_torch_device
+    device = pick_torch_device()
+    print(f"Loading {EMBEDDING_MODEL} on {device} ...")
     from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer(EMBEDDING_MODEL, device="cpu")
+    model = SentenceTransformer(EMBEDDING_MODEL, device=device)
     print(f"  device: {model.device}")
 
     # qdrant

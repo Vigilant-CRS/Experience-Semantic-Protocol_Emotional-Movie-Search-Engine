@@ -45,12 +45,13 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
-# Make sure CPU-only before torch import
-os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
+# Device selection is handled inside scripts/search_v3.py::pick_torch_device,
+# which respects EMBEDDING_DEVICE=auto|cuda|cpu. Old GPUs (sm_<70 like
+# Quadro P620) fall back to CPU automatically — no env hack needed.
 
 from scripts.search_v3 import (
     load_indices, to_sparse, manual_weighted_fusion,
-    encode_query_text, COLLECTION,
+    encode_query_text, COLLECTION, _ep as _engine_param,
 )
 from qdrant_client.models import (
     Filter, FieldCondition, MatchValue, MatchAny, Range,
@@ -128,8 +129,15 @@ app = FastAPI(title="MindRead V3 API",
               version="3.0.0",
               docs_url="/api/docs")
 
+_cors_raw = os.environ.get("CORS_ORIGINS",
+                            str(_engine_param("http", "cors_origins", default="*")))
+_cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()] or ["*"]
+# Spec note: allow_credentials with wildcard is invalid (browsers reject). Only
+# enable credentials when origins are explicitly listed.
+_allow_creds = _cors_origins != ["*"]
 app.add_middleware(CORSMiddleware,
-                    allow_origins=["*"], allow_credentials=True,
+                    allow_origins=_cors_origins,
+                    allow_credentials=_allow_creds,
                     allow_methods=["*"], allow_headers=["*"])
 
 
@@ -361,6 +369,21 @@ def get_ontology(lang: str = "en"):
     }
 
 
+@app.post("/api/admin/refresh-title-index")
+def refresh_title_index():
+    """Rebuild the in-memory TITLE_INDEX from Qdrant.
+
+    Called after a reindex to pick up new films without restarting the API.
+    Safe to call repeatedly — fully rebuilds the cache. No auth in this build;
+    if the deployment exposes admin endpoints publicly, gate it at the
+    reverse-proxy layer.
+    """
+    TITLE_INDEX.clear()
+    TITLE_PAYLOADS.clear()
+    _build_title_index()
+    return {"status": "ok", "title_keys": len(TITLE_INDEX), "films": len(TITLE_PAYLOADS)}
+
+
 @app.get("/api/film/{tmdb_id}")
 def get_film(tmdb_id: int):
     pts = QDRANT.retrieve(COLLECTION, ids=[tmdb_id], with_payload=True)
@@ -395,24 +418,87 @@ def _build_title_index():
     log.info(f"Title index: {len(TITLE_INDEX)} title-keys for {n} films")
 
 
+import re as _re
+
+
+def _normalize_title(t: str) -> str:
+    """Aggressive normalization: lowercase, strip punctuation, collapse spaces.
+
+    Maps 'The Devil's Advocate' / 'Devils Advocate' / 'the-devils-advocate'
+    all to 'devils advocate' for matching purposes.
+    """
+    if not t:
+        return ""
+    t = t.lower().strip()
+    # remove leading articles
+    t = _re.sub(r"^(the|a|an|der|die|das|le|la|el|il)\s+", "", t)
+    # strip everything that isn't alphanumeric or whitespace
+    t = _re.sub(r"[^\w\s]", " ", t, flags=_re.UNICODE)
+    # collapse whitespace
+    t = _re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def _title_tokens(t: str) -> set:
+    return set(_normalize_title(t).split()) - {"the", "a", "an", "of", "and"}
+
+
 def _find_film_by_title(title: str):
-    """Fast in-memory lookup: exact, then substring against the title index."""
+    """Robust title lookup with three tiers:
+      1) Exact lowercase match (cheapest, most precise)
+      2) Normalized-form exact match (strips punctuation, articles)
+      3) Token-overlap with score; requires both
+         (a) significant token overlap (≥50% of query tokens covered)
+         (b) length within ±50% of query length (avoid 'Heat' → 'Heatstroke')
+
+    Improvement over the previous naive substring matcher (audit Pfusch #14).
+    """
     if not title:
         return None
-    target = title.strip().lower()
-    # Exact
-    if target in TITLE_INDEX:
-        tid = TITLE_INDEX[target]
+    target_raw = title.strip().lower()
+    # Tier 1: exact lowercase
+    if target_raw in TITLE_INDEX:
+        tid = TITLE_INDEX[target_raw]
         pts = QDRANT.retrieve(COLLECTION, ids=[tid], with_payload=True)
         return pts[0] if pts else None
-    # Substring (in-memory)
-    matches = [(t, tid) for t, tid in TITLE_INDEX.items()
-                if target in t or t in target]
-    if not matches:
+
+    # Tier 2: exact normalized
+    target_norm = _normalize_title(title)
+    if target_norm:
+        for t_key, tid in TITLE_INDEX.items():
+            if _normalize_title(t_key) == target_norm:
+                pts = QDRANT.retrieve(COLLECTION, ids=[tid], with_payload=True)
+                return pts[0] if pts else None
+
+    # Tier 3: token-overlap with length-similarity guard
+    qtokens = _title_tokens(title)
+    if not qtokens:
         return None
-    # Prefer shortest matching title (more likely to be the actual film, not a sequel)
-    matches.sort(key=lambda x: abs(len(x[0]) - len(target)))
-    tid = matches[0][1]
+    qlen = len(target_norm) or len(target_raw)
+    candidates = []  # (score, length_penalty, tid)
+    for t_key, tid in TITLE_INDEX.items():
+        cand_tokens = _title_tokens(t_key)
+        if not cand_tokens:
+            continue
+        overlap = len(qtokens & cand_tokens)
+        if overlap < max(1, len(qtokens) // 2):  # need ≥ half of query tokens
+            continue
+        cand_len = len(_normalize_title(t_key))
+        if cand_len == 0:
+            continue
+        # length-ratio: 1.0 = perfect, smaller = more deviation
+        length_ratio = min(qlen, cand_len) / max(qlen, cand_len)
+        if length_ratio < 0.5:  # 'Heat' (4) vs 'Heatstroke' (10) → ratio 0.4 → skip
+            continue
+        # higher score = better: more overlap, length closer to query
+        score = overlap / len(qtokens) + length_ratio * 0.5
+        candidates.append((score, tid, t_key))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: -x[0])
+    tid = candidates[0][1]
+    log.info(f"_find_film_by_title({title!r}) → matched {candidates[0][2]!r} "
+             f"score={candidates[0][0]:.2f}")
     pts = QDRANT.retrieve(COLLECTION, ids=[tid], with_payload=True)
     return pts[0] if pts else None
 
@@ -578,22 +664,26 @@ def search(req: SearchRequest):
                 # Blend: 60% reference film DNA + 40% LLM-extracted modifier
                 ref_emo = ref_payload.get("emotion_dna", {})
                 ref_th  = ref_payload.get("theme_dna", {})
+                # Blend ratios from config/engine_params.yaml (F-012).
+                _ref_w = float(_engine_param("tone_shift", "reference_weight", default=0.6))
+                _mod_w = float(_engine_param("tone_shift", "modifier_weight", default=0.4))
+                _renorm = bool(_engine_param("tone_shift", "renormalize_l1", default=True))
                 if ref_emo:
                     blended_emo = {}
                     for t, w in ref_emo.items():
-                        blended_emo[t] = blended_emo.get(t, 0) + w * 0.6
+                        blended_emo[t] = blended_emo.get(t, 0) + w * _ref_w
                     for t, w in query_emo.items():
-                        blended_emo[t] = blended_emo.get(t, 0) + w * 0.4
-                    # Re-normalize to L1=1 — guards against drift when the modifier
-                    # is empty (pure "wie X" returns 0.6·ref otherwise). Audit F-015.
-                    query_emo = normalize_l1(blended_emo)
+                        blended_emo[t] = blended_emo.get(t, 0) + w * _mod_w
+                    # Re-normalize to L1=1 (Audit F-015) — guards against drift
+                    # when the modifier is empty (pure "wie X" returns 0.6·ref otherwise).
+                    query_emo = normalize_l1(blended_emo) if _renorm else blended_emo
                 if ref_th:
                     blended_th = {}
                     for t, w in ref_th.items():
-                        blended_th[t] = blended_th.get(t, 0) + w * 0.6
+                        blended_th[t] = blended_th.get(t, 0) + w * _ref_w
                     for t, w in query_th.items():
-                        blended_th[t] = blended_th.get(t, 0) + w * 0.4
-                    query_th = normalize_l1(blended_th)
+                        blended_th[t] = blended_th.get(t, 0) + w * _mod_w
+                    query_th = normalize_l1(blended_th) if _renorm else blended_th
                 # Also use reference film's synopsis_dense as base, blend later
                 ref_dna_used = True
                 log.info(f"Resolved similar_to_title='{ref_title}' → {reference_title} (blended)")

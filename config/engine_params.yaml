@@ -1,0 +1,71 @@
+# MindRead V3 — Engine-Parameter
+#
+# Single source of truth for all tuned constants used by the retrieval engine.
+# Replaces previously-hardcoded "magic numbers" scattered across the codebase
+# (audit finding F-012).  All values come with a brief rationale; customers
+# who want to re-tune for their corpus only need to edit this file.
+#
+# File format: YAML.  Loaded once at startup; restart API to apply changes.
+
+retrieval:
+  # Default channel weights — slider initial positions.  Must each be in [0, 1].
+  # Customer slider UI typically normalizes the sum to 1.0 but is not required to.
+  default_weights:
+    w_synopsis: 0.35   # E5-large-v2 dense channel (semantic, catches concrete terms)
+    w_emotion:  0.25   # emotion_sparse: Plutchik 8x3 + Wirkung
+    w_theme:    0.25   # theme_sparse: plot_themes + genres + settings + moods + pacing
+    w_subject:  0.15   # subject_sparse (separate channel after F-017 fix)
+
+  # Per-channel over-fetch factor for cross-channel RRF coverage.
+  # Each channel returns `limit * over_fetch_multiplier` candidates so that
+  # different top-K lists have a chance to overlap before fusion ranks them.
+  over_fetch_multiplier: 20
+
+fusion:
+  algorithm: weighted_rrf      # only algo we ship; engineering extension of Cormack 2009
+  rrf_k: 60                    # damping constant; rank-1 contributes 1/(60+1) ≈ 0.0164
+
+avoid:
+  # Three avoid mechanisms exist; see DECISIONS.md D-011 for the asymmetry rationale.
+  soft_penalty_factor: 0.5     # multiplier on weighted-mass of avoided tags
+  soft_score_magnitude: 0.02   # absolute score unit (≈ RRF top-rank magnitude)
+  strict_threshold: 0.10       # drop films with avoided-mass > this (avoid_strict=True)
+
+tone_shift:
+  # "Filme wie X aber Y" blending: query_dna = ref_weight * ref + modifier_weight * mod.
+  # Result is L1-renormalized (F-015 fix).
+  reference_weight: 0.6
+  modifier_weight: 0.4
+  renormalize_l1: true
+
+popularity_boost:
+  # Slider `indie_mainstream` in [-1, +1]. Magnitude scaled to RRF unit.
+  scale: 0.01                  # comparable to RRF rank-1 contribution
+  # Indie boost (slider<0) is conditional on quality to avoid promoting
+  # obscure low-quality films. Mainstream boost (slider>0) has no quality gate.
+  indie_min_quality_va: 7.0
+
+synonym:
+  # Non-canonical tags get mapped to canonical via synonyms.json with a decay.
+  # 0.7 inherited from v1; never empirically retuned.
+  decay: 0.7
+
+diversify:
+  # Franchise-demotion re-rank.  See search_v3.diversify().
+  enabled: true
+  demotion_strength: 0.4
+  ref_franchise_softening: 0.5   # reference-film franchise demoted at half strength
+  max_per_franchise: 2
+  ref_franchise_cap_multiplier: 2   # reference-film franchise cap is 2 * max_per_franchise
+
+llm:
+  # Defaults; per-request can override via env at startup.
+  openai_model: gpt-5-mini
+  temperature: 0.1
+  max_tokens: 1500
+
+http:
+  cors_origins: "*"            # Demo default; override via CORS_ORIGINS env in production.
+
+logging:
+  log_filter_decisions: false  # set true to log every must / must_not addition

@@ -4,10 +4,14 @@ Lokaler LLM Provider — Drop-in-Replacement für OpenAI Chat-Completions.
 Lädt ein GGUF-Modell via llama-cpp-python einmal beim Import, hält es im RAM.
 Exportiert `chat_complete(system, user)` mit demselben Vertrag wie der OpenAI-Pfad.
 
-Aktivierung über Umgebungsvariablen:
-  LOCAL_LLM_ENABLED=1
-  LOCAL_LLM_GGUF=/path/to/Qwen3.5-2B-Q6_K.gguf  (default: 2B)
+Konfiguration via Umgebungsvariablen (keine hardcoded Pfade):
+  LOCAL_LLM_ENABLED=1           # api_v3 nutzt diesen Pfad statt OpenAI
+  LOCAL_LLM_GGUF=/full/path.gguf  # exakter Modellpfad (höchste Priorität)
+  LOCAL_LLM_MODEL_DIR=/dir       # Verzeichnis in dem nach GGUFs gesucht wird
+  LOCAL_LLM_SIZE=2b|4b           # Größen-Preference wenn LOCAL_LLM_GGUF leer
   LOCAL_LLM_THREADS=12
+  LOCAL_LLM_N_GPU_LAYERS=999     # alle Layer auf GPU; 0 = pure CPU
+  LOCAL_LLM_CTX=8192
 
 Usage als Speed-Test:
   venv/bin/python3 scripts/llm_local.py --query "Filme wie John Wick aber lustiger"
@@ -15,17 +19,58 @@ Usage als Speed-Test:
 from __future__ import annotations
 import os, sys, json, time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 ROOT = Path(__file__).resolve().parent.parent
 
-DEFAULTS = {
-    "qwen3.5-2b": "/media/dd/USB_4028/Projekte/Temp/Vigilant-Models/Qwen3.5-2B-GGUF/Qwen3.5-2B-Q6_K.gguf",
-    "qwen3.5-4b": "/media/dd/USB_4028/Projekte/Temp/Vigilant-Models/Qwen3.5-4B-GGUF/Qwen3.5-4B-Q5_K_M.gguf",
+# Filename-Patterns pro Größen-Preference. Werden im LOCAL_LLM_MODEL_DIR gesucht.
+_SIZE_PATTERNS = {
+    "2b": ["Qwen3.5-2B-Q6_K.gguf", "qwen2.5-2b-instruct-q6_k.gguf",
+           "Qwen3.5-2B*.gguf", "qwen*2b*.gguf"],
+    "4b": ["Qwen3.5-4B-Q5_K_M.gguf", "qwen2.5-4b-instruct-q5_k_m.gguf",
+           "Qwen3.5-4B*.gguf", "qwen*4b*.gguf"],
 }
 
 _LLM = None
-_LOAD_LOCK_FILE = "/tmp/.mindread_llm_loading"
+
+
+def _resolve_gguf_path() -> str:
+    """Find a GGUF model file via env config; no hardcoded paths.
+
+    Priority:
+      1. LOCAL_LLM_GGUF (exact path)
+      2. LOCAL_LLM_MODEL_DIR + LOCAL_LLM_SIZE (glob lookup)
+      3. error with helpful message
+
+    Audit Pfusch #1 fix — previously had hardcoded USB-HDD paths in DEFAULTS.
+    """
+    exact = os.environ.get("LOCAL_LLM_GGUF")
+    if exact:
+        if not Path(exact).exists():
+            raise RuntimeError(f"LOCAL_LLM_GGUF={exact!r} does not exist")
+        return exact
+
+    model_dir = os.environ.get("LOCAL_LLM_MODEL_DIR")
+    size = os.environ.get("LOCAL_LLM_SIZE", "2b")
+    patterns = _SIZE_PATTERNS.get(size, _SIZE_PATTERNS["2b"])
+
+    candidates: List[Path] = []
+    if model_dir:
+        d = Path(model_dir)
+        if not d.is_dir():
+            raise RuntimeError(f"LOCAL_LLM_MODEL_DIR={model_dir!r} is not a directory")
+        for pat in patterns:
+            candidates.extend(d.rglob(pat))
+    if not candidates:
+        raise RuntimeError(
+            "No GGUF model found. Set one of:\n"
+            "  LOCAL_LLM_GGUF=/absolute/path/to/model.gguf  (exact)\n"
+            "  LOCAL_LLM_MODEL_DIR=/dir/with/ggufs  (auto-discover by LOCAL_LLM_SIZE={2b,4b})\n"
+            f"Searched patterns: {patterns}"
+        )
+    # Prefer exact matches over glob results — stable sort keeps first preferred file
+    candidates.sort(key=lambda p: (p.name not in patterns, p.name))
+    return str(candidates[0])
 
 
 def get_llm():
@@ -33,13 +78,7 @@ def get_llm():
     if _LLM is not None:
         return _LLM
     from llama_cpp import Llama
-    gguf = os.environ.get("LOCAL_LLM_GGUF")
-    if not gguf:
-        # Pick by size preference: 2B is faster, 4B more accurate
-        size = os.environ.get("LOCAL_LLM_SIZE", "2b")
-        gguf = DEFAULTS.get(f"qwen3.5-{size}", DEFAULTS["qwen3.5-2b"])
-    if not Path(gguf).exists():
-        raise RuntimeError(f"Local LLM GGUF not found: {gguf}")
+    gguf = _resolve_gguf_path()
     n_threads = int(os.environ.get("LOCAL_LLM_THREADS", "12"))
     n_ctx = int(os.environ.get("LOCAL_LLM_CTX", "8192"))
     n_gpu_layers = int(os.environ.get("LOCAL_LLM_N_GPU_LAYERS", "0"))

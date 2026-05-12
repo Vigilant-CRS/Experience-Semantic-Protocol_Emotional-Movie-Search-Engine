@@ -296,6 +296,27 @@ def normalize_l1(d: Dict[str, float]) -> Dict[str, float]:
             if isinstance(v, (int, float)) and v > 0}
 
 
+_SYNONYM_DECAY_CACHED: Optional[float] = None
+
+
+def _synonym_decay() -> float:
+    """Read decay factor from config/engine_params.yaml; cached.
+
+    Decoupled from search_v3._ep to avoid import cycle (extract_dna_v3 is
+    imported by api_v3 which imports search_v3).
+    """
+    global _SYNONYM_DECAY_CACHED
+    if _SYNONYM_DECAY_CACHED is not None:
+        return _SYNONYM_DECAY_CACHED
+    try:
+        import yaml
+        cfg = yaml.safe_load(open(ROOT / "config" / "engine_params.yaml")) or {}
+        _SYNONYM_DECAY_CACHED = float(cfg.get("synonym", {}).get("decay", 0.7))
+    except Exception:
+        _SYNONYM_DECAY_CACHED = 0.7
+    return _SYNONYM_DECAY_CACHED
+
+
 def filter_to_canonical(d: Dict[str, float], allowed: List[str],
                         synonyms: Dict[str, List[str]]) -> Dict[str, float]:
     """Keep only canonical tags. Map synonyms to canonical heads."""
@@ -306,6 +327,7 @@ def filter_to_canonical(d: Dict[str, float], allowed: List[str],
         if canon in allowed:
             for s in syns:
                 syn_to_canonical[s.lower()] = canon
+    decay = _synonym_decay()
     out: Dict[str, float] = {}
     for k, v in d.items():
         if not isinstance(v, (int, float)) or v <= 0:
@@ -316,7 +338,7 @@ def filter_to_canonical(d: Dict[str, float], allowed: List[str],
         else:
             mapped = syn_to_canonical.get(kk.lower())
             if mapped and mapped in allowed:
-                out[mapped] = out.get(mapped, 0.0) + float(v) * 0.7  # synonym decay
+                out[mapped] = out.get(mapped, 0.0) + float(v) * decay
     return out
 
 
