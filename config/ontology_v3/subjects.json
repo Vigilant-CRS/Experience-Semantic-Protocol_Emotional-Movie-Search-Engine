@@ -1,0 +1,32 @@
+{
+  "_version": "v3.2.0",
+  "_description": "Subjects/topics (what the film is ABOUT). Lives at the END of the theme_sparse layout (appended after pacing). New dims 88-109 in theme_sparse. Films extracted before this bucket existed have zero weight in these dims and pass through gracefully — no false matches, no false exclusions. Slider mechanism applies via theme weight.",
+  "_count": 24,
+  "_storage": "theme_sparse, weighted dict (separately L1-normalized like setting/mood/pacing)",
+  "tags": [
+    "vampire",
+    "zombie",
+    "werewolf",
+    "ghost",
+    "alien_invasion",
+    "monster_creature",
+    "mafia",
+    "serial_killer",
+    "true_crime",
+    "martial_arts",
+    "espionage",
+    "sports",
+    "music_performance",
+    "prison_life",
+    "courtroom_legal",
+    "hospital_medical",
+    "military_ops",
+    "school_university",
+    "biopic",
+    "historical_event",
+    "musical",
+    "mockumentary",
+    "found_footage",
+    "anime"
+  ]
+}

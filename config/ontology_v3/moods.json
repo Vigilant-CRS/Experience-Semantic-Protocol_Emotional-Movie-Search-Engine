@@ -1,0 +1,20 @@
+{
+  "_version": "v3.0.0",
+  "_description": "Atmospheric mood — overall tonal feel of the film",
+  "_count": 12,
+  "_storage": "payload, weighted dict",
+  "tags": [
+    "dark",
+    "light",
+    "whimsical",
+    "gritty",
+    "dreamy",
+    "claustrophobic",
+    "epic",
+    "intimate",
+    "nostalgic",
+    "noir",
+    "surreal",
+    "contemplative"
+  ]
+}

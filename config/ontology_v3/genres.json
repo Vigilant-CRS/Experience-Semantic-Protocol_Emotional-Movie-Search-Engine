@@ -1,0 +1,26 @@
+{
+  "_version": "v3.0.0",
+  "_description": "TMDB feature-film genres (TV Movie excluded)",
+  "_count": 18,
+  "_normalization": "shares L1=1 budget with plot_themes in theme_sparse",
+  "tags": [
+    "Action",
+    "Adventure",
+    "Animation",
+    "Comedy",
+    "Crime",
+    "Documentary",
+    "Drama",
+    "Family",
+    "Fantasy",
+    "History",
+    "Horror",
+    "Music",
+    "Mystery",
+    "Romance",
+    "Science Fiction",
+    "Thriller",
+    "War",
+    "Western"
+  ]
+}

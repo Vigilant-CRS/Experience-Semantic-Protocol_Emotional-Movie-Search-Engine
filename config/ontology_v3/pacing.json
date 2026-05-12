@@ -1,0 +1,16 @@
+{
+  "_version": "v3.0.0",
+  "_description": "Pacing/style of the film",
+  "_count": 8,
+  "_storage": "payload, weighted dict",
+  "tags": [
+    "slow_burn",
+    "action_packed",
+    "atmospheric",
+    "dialogue_driven",
+    "visual_spectacle",
+    "non_linear",
+    "minimalist",
+    "fast_paced"
+  ]
+}

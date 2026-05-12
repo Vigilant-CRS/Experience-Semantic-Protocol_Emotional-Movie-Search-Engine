@@ -1,0 +1,26 @@
+{
+  "_version": "v3.0.0",
+  "_description": "Plutchik 8 emotion families × 3 intensities = 24 emotions",
+  "_count": 24,
+  "_normalization": "L1 (weights sum to 1.0 within emotion_sparse together with wirkung tags)",
+  "families": {
+    "joy":          ["ecstasy", "joy", "contentment"],
+    "love":         ["love", "tenderness", "warmth"],
+    "wonder":       ["awe", "wonder", "curiosity"],
+    "anticipation": ["excitement", "thrill", "anticipation"],
+    "fear":         ["terror", "fear", "dread"],
+    "sadness":      ["grief", "melancholy", "sadness"],
+    "anger":        ["rage", "anger", "frustration"],
+    "darkness":     ["disgust", "horror", "despair"]
+  },
+  "tags": [
+    "ecstasy", "joy", "contentment",
+    "love", "tenderness", "warmth",
+    "awe", "wonder", "curiosity",
+    "excitement", "thrill", "anticipation",
+    "terror", "fear", "dread",
+    "grief", "melancholy", "sadness",
+    "rage", "anger", "frustration",
+    "disgust", "horror", "despair"
+  ]
+}

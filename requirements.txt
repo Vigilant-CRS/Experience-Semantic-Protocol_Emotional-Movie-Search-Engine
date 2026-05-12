@@ -1,0 +1,55 @@
+# MindRead MVP Dependencies - Python 3.12 Compatible
+# Updated: July 2025 - E5 Migration Complete
+
+# Core
+python-dotenv==1.0.1
+requests==2.32.3
+pandas==2.2.0
+numpy==1.26.3
+
+# ML/AI - Updated for E5
+sentence-transformers==3.0.1             # E5 support
+transformers==4.41.2                     # E5 compatibility
+torch>=2.2.0                             # Python 3.12 compatible
+mistralai==0.4.2                         # using mistral-medium
+scikit-learn==1.4.0
+huggingface-hub>=0.23.0                  # model download helper
+
+# Vector Database
+qdrant-client==1.9.1
+
+# Caching
+redis==5.0.1
+
+# YAML / Config
+pyyaml>=6.0
+
+# API Framework
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+python-multipart==0.0.9
+httpx>=0.27.0
+tenacity==8.3.0
+
+# Frontend / Demo
+streamlit==1.35.0
+aiohttp==3.9.5
+plotly==5.22.0
+
+# Data Validation
+pydantic==2.7.4
+
+# Utilities
+aiofiles==23.2.1
+tqdm==4.66.4
+
+# Development (optional)
+pytest==8.2.2
+pytest-asyncio==0.23.7
+ipython==8.25.0
+black==24.3.0          # Code formatter
+ruff==0.4.1            # Linter & fixer
+
+# Additional for E5 & acceleration
+accelerate==0.31.0
+safetensors==0.4.3

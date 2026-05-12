@@ -1,0 +1,14 @@
+{
+  "_version": "v3.0.0",
+  "_description": "Viewer-impact tags — what the film does TO the viewer (separate bucket from emotions)",
+  "_count": 6,
+  "_normalization": "shares L1=1 budget with emotions in emotion_sparse",
+  "tags": [
+    "cathartic",
+    "unsettling",
+    "bittersweet",
+    "haunting",
+    "comforting",
+    "inspiring"
+  ]
+}

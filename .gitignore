@@ -1,0 +1,39 @@
+# Secrets — MUST NEVER be committed
+.env
+.env.*
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+venv/
+.venv/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build / cache
+.cache/
+*.log
+
+# Data — all generated, not committed
+qdrant_data/
+data/
+movies_export.json
+movies_export.jsonl
+
+# Old/archived
+archive/
+
+# Analytics dumps
+analytics_data/

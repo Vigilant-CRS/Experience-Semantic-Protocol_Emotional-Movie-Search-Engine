@@ -1,0 +1,18 @@
+{
+  "_version": "v3.0.0",
+  "_description": "Protagonist archetype, single-value field per film",
+  "_count": 10,
+  "_storage": "payload, single value",
+  "tags": [
+    "antihero",
+    "chosen_one",
+    "everyman",
+    "mentor",
+    "reluctant_hero",
+    "tragic_hero",
+    "villain_protagonist",
+    "ensemble",
+    "outsider",
+    "coming_of_age_hero"
+  ]
+}

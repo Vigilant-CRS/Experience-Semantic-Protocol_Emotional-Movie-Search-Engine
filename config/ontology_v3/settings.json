@@ -1,0 +1,23 @@
+{
+  "_version": "v3.0.0",
+  "_description": "World/setting in which the film takes place",
+  "_count": 15,
+  "_storage": "payload, weighted dict, should-match",
+  "tags": [
+    "urban_modern",
+    "rural_modern",
+    "suburban_modern",
+    "period_historical",
+    "period_20th_century",
+    "post_apocalyptic",
+    "dystopian_future",
+    "sci_fi_future",
+    "fantasy_world",
+    "space_setting",
+    "wilderness",
+    "war_zone",
+    "religious_setting",
+    "corporate_world",
+    "criminal_underworld"
+  ]
+}

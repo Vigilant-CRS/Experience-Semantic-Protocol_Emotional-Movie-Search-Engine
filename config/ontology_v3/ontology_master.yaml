@@ -1,0 +1,81 @@
+version: v3.0.0
+created: "2026-04-30"
+description: |
+  MindRead Ontology v3 — disciplined cut from 1023 tags down to 128.
+  Backbone: Plutchik (emotions), Booker/Polti (plot themes), TMDB (genres),
+  Hero's Journey (archetypes). Each tag has 1-line definition + synonyms.
+
+  STORAGE MAPPING:
+    emotion_sparse  (Qdrant, L1=1):  emotions (24) + wirkung (6) = 30 dims
+    theme_sparse    (Qdrant, L1=1):  plot_themes (35) + genres (18) = 53 dims
+    synopsis_dense  (Qdrant, L2=1):  E5-large-v2 of overview+keywords+title
+
+  PAYLOAD (not vector):
+    setting (weighted dict over 15 tags, should-match)
+    archetype (single value from 10)
+    mood (weighted dict over 12 tags)
+    pacing (weighted dict over 8 tags)
+    protagonist_gender (male|female|ensemble|non_binary)
+    + standard fields: year, runtime, vote_count, vote_average, popularity
+
+buckets:
+  emotions:
+    file: emotions.json
+    count: 24
+    storage: emotion_sparse (shared)
+  wirkung:
+    file: wirkung.json
+    count: 6
+    storage: emotion_sparse (shared)
+  plot_themes:
+    file: plot_themes.json
+    count: 35
+    storage: theme_sparse (shared)
+  genres:
+    file: genres.json
+    count: 18
+    storage: theme_sparse (shared)
+  settings:
+    file: settings.json
+    count: 15
+    storage: payload (weighted dict)
+  archetypes:
+    file: archetypes.json
+    count: 10
+    storage: payload (single value)
+  moods:
+    file: moods.json
+    count: 12
+    storage: payload (weighted dict)
+  pacing:
+    file: pacing.json
+    count: 8
+    storage: payload (weighted dict)
+
+total_tags: 128
+
+vectors:
+  synopsis_dense:
+    dim: 1024
+    distance: Cosine
+    norm: L2=1
+    source: E5-large-v2 of "passage: {title} ({year}). {overview} {keywords}"
+  emotion_sparse:
+    dim: 30
+    distance: Dot
+    norm: L1=1
+    layout: "indices 0-23: emotions in canonical order, 24-29: wirkung"
+  theme_sparse:
+    dim: 53
+    distance: Dot
+    norm: L1=1
+    layout: "indices 0-34: plot_themes, 35-52: genres"
+
+synonyms:
+  file: synonyms.json
+  decay_factor: 0.7
+  usage: "LLM tolerance + query-time expansion"
+
+definitions:
+  file: tag_definitions.json
+  usage: "Cached system-prompt for DNA extraction"

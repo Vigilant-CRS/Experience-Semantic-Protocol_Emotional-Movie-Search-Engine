@@ -1,0 +1,18 @@
+{
+  "_version": "v3.1.0",
+  "_description": "Content features (weapons, violence, content advisories). Stored as PAYLOAD-ONLY weighted dict — NOT in any sparse vector layout. Adding/removing tags here does NOT shift sparse-vector indices and is safe to extend without re-indexing existing films. Existing films without this field simply pass through any avoid_content filter (graceful no-op).",
+  "_count": 10,
+  "_storage": "payload, weighted dict",
+  "tags": [
+    "firearms",
+    "bladed_weapons",
+    "physical_combat",
+    "explosions",
+    "supernatural_combat",
+    "vehicular_combat",
+    "graphic_violence",
+    "torture",
+    "sexual_content",
+    "drug_use"
+  ]
+}

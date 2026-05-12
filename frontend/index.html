@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MindRead V3 — Emotional Movie Search</title>
+<style>
+  :root{
+    --bg:#13161e; --panel:#1c2030; --panel2:#262b3d;
+    --text:#f3f5f8; --text2:#d6dae0; --muted:#9fa6b2; --accent:#ff7a85; --accent2:#5ee0d2;
+    --joy:#ffd23f; --love:#ff5d8f; --wonder:#7de1ff; --antic:#ff924c;
+    --fear:#b06fd1; --sadness:#7ba3ff; --anger:#e85a4e; --darkness:#735454;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,system-ui,Segoe UI,Roboto,sans-serif;
+       background:var(--bg);color:var(--text);font-size:15px;line-height:1.5}
+  header{padding:12px 24px;background:linear-gradient(180deg,#1f2230,#0c0e14);
+         display:flex;align-items:center;gap:12px;border-bottom:1px solid #2a2e3c}
+  header h1{margin:0;font-size:17px;font-weight:600}
+  header .badge{font-size:11px;color:var(--muted);background:#2a2e3c;
+                padding:3px 8px;border-radius:10px}
+  header .stats{font-size:11px;color:var(--muted)}
+
+  /* ─ Top search bar ─ */
+  .search-bar{display:flex;gap:10px;padding:18px 24px;background:#11141d;border-bottom:1px solid #2a2e3c}
+  .search-bar input{flex:1;padding:14px 18px;background:var(--panel);border:1.5px solid #2a2e3c;
+                    color:var(--text);border-radius:10px;font-size:15px}
+  .search-bar input:focus{border-color:var(--accent);outline:none}
+  .search-bar .btn{padding:14px 22px;background:var(--accent);color:#0c0e14;border:none;
+                   border-radius:10px;font-weight:600;cursor:pointer;font-size:14px}
+  .search-bar .btn:hover{opacity:0.85}
+  .search-bar .btn.secondary{background:#2a2e3c;color:var(--text)}
+  .search-bar .btn:disabled{opacity:0.4;cursor:not-allowed}
+  .examples{padding:8px 24px;font-size:11px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .examples a{color:var(--accent2);cursor:pointer;text-decoration:underline dotted}
+
+  /* ─ Two-column layout below ─ */
+  .layout{display:grid;grid-template-columns:380px 1fr;gap:14px;padding:14px 24px}
+  .sidebar{display:flex;flex-direction:column;gap:12px}
+  .panel{background:var(--panel);border:1px solid #2a2e3c;border-radius:12px;padding:14px}
+  .panel h2{margin:0 0 10px 0;font-size:13px;color:var(--text2);text-transform:uppercase;
+            letter-spacing:0.5px;font-weight:600;display:flex;justify-content:space-between;align-items:center}
+  .panel h2 .count{font-size:11px;color:var(--accent2);text-transform:none;letter-spacing:0;font-weight:500}
+
+  /* ─ Wheel ─ */
+  .wheel-wrap{display:flex;justify-content:center;padding:4px 0}
+  svg.wheel{width:340px;height:340px;cursor:pointer;user-select:none}
+  svg.wheel .seg{stroke:#0c0e14;stroke-width:1.5;transition:fill-opacity 120ms,stroke-width 120ms}
+  svg.wheel .seg{fill-opacity:0.18}
+  svg.wheel .seg:hover{fill-opacity:0.55}
+  svg.wheel .seg.selected{fill-opacity:0.95;stroke:#fff;stroke-width:2}
+  svg.wheel .seg.suggested{fill-opacity:0.65;stroke:var(--accent2);stroke-width:1.8;stroke-dasharray:3 2}
+  svg.wheel .seg.avoid{fill:#222 !important;fill-opacity:0.85;stroke:var(--accent);stroke-width:2}
+  svg.wheel text{font-size:9.5px;fill:#fff;text-anchor:middle;pointer-events:none;font-weight:500}
+  svg.wheel text.dim{font-size:8.5px;fill:#cbd0d6}
+  svg.wheel .ctr-label{font-size:10px;fill:var(--muted)}
+
+  .pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .pill{font-size:12.5px;padding:5px 11px;border-radius:999px;background:#2c3245;color:var(--text2);
+        cursor:pointer;border:1.5px solid transparent;transition:all 120ms}
+  .pill:hover{border-color:#3a3f4b}
+  .pill.selected{background:var(--accent);color:#0c0e14;font-weight:600}
+  .pill.suggested{background:#2a3744;border-color:var(--accent2);color:var(--accent2)}
+  .pill.avoid{background:#3a2a2a;color:#bbb;text-decoration:line-through;border-color:#5a3a3a}
+
+  .legend{font-size:10.5px;color:var(--muted);padding:6px 0;line-height:1.6}
+  .legend code{background:#2a2e3c;padding:1px 5px;border-radius:3px;font-size:10px}
+  .legend .dot{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:middle;margin-right:5px}
+  .legend .dot.selected{background:var(--accent)}
+  .legend .dot.suggested{background:#2a3744;border:1.5px dashed var(--accent2)}
+  .legend .dot.avoid{background:#222;border:1.5px solid var(--accent)}
+
+  /* ─ Sliders ─ */
+  .triangle-mix{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:11px;text-align:center;margin-bottom:8px}
+  .triangle-mix > div{padding:6px 4px;background:#2a2e3c;border-radius:6px}
+  .triangle-mix .label{color:var(--muted);font-size:10px;text-transform:uppercase}
+  .triangle-mix .val{color:var(--accent2);font-weight:700;margin-top:2px;font-size:13px}
+  .sliders{display:flex;flex-direction:column;gap:8px}
+  .slider-row{display:grid;grid-template-columns:115px 1fr 38px;align-items:center;gap:6px}
+  .slider-row label{font-size:11px;color:var(--muted)}
+  .slider-row input[type=range]{width:100%;accent-color:var(--accent)}
+  .slider-row .v{font-size:10.5px;color:var(--text);text-align:right;font-variant-numeric:tabular-nums}
+
+  /* ─ Results ─ */
+  .results{display:flex;flex-direction:column;gap:12px}
+  .result-meta{padding:10px 14px;background:var(--panel);border:1px solid #2a2e3c;
+               border-radius:10px;font-size:11.5px;color:var(--muted);
+               display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+  .result-meta .lbl{color:var(--text)}
+  .result-meta details summary{cursor:pointer;color:var(--accent2)}
+
+  .result{background:var(--panel);border:1px solid #2a2e3c;border-radius:12px;padding:0;
+          display:grid;grid-template-columns:120px 1fr;gap:0;overflow:hidden;
+          transition:border-color 120ms}
+  .result:hover{border-color:#3a3f4b}
+  .result .poster{width:120px;height:180px;background:#1f2230;object-fit:cover;display:block}
+  .result .poster.placeholder{display:flex;align-items:center;justify-content:center;color:#3a3f4b;font-size:36px}
+  .result .body{padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+  .result h3{margin:0;font-size:17px;font-weight:600;color:var(--text)}
+  .result h3 .year{color:var(--muted);font-weight:400;margin-left:8px;font-size:14px}
+  .result h3 .rank{color:var(--accent2);font-size:12px;background:#2a3744;padding:3px 8px;border-radius:8px;margin-right:8px;font-weight:700}
+  .result .meta-line{font-size:12.5px;color:var(--text2)}
+  .result .meta-line .sep{margin:0 6px}
+  .result .overview{font-size:13.5px;line-height:1.55;color:var(--text2);margin-top:4px;
+                    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .result .why{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:6px}
+  .result .why-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;margin-right:2px}
+  .result .why-tag{font-size:11.5px;padding:3px 9px;border-radius:8px;background:#2a3744;
+                   color:var(--accent2);border:1px solid var(--accent2)}
+  .result .dna-tag{font-size:11px;padding:2px 8px;border-radius:8px;background:#2c3245;color:var(--text2)}
+  .result .footer{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #2a2e3c}
+  .result .score-big{font-size:14px;color:var(--accent2);font-weight:700;font-variant-numeric:tabular-nums}
+  .result .channels-mini{font-size:11px;color:var(--muted);font-family:ui-monospace,Menlo,monospace;margin-left:10px}
+  .result .btn-similar{font-size:11.5px;padding:6px 12px;background:#2c3245;color:var(--text);
+                       border:1px solid #3a3f4b;border-radius:6px;cursor:pointer;font-weight:500}
+  .result .btn-similar:hover{border-color:var(--accent2);color:var(--accent2)}
+  .result .poster{width:120px;height:180px}
+
+  .empty{padding:60px 20px;text-align:center;color:var(--text2)}
+  .empty h2{color:var(--text);font-weight:500;font-size:20px;margin-bottom:10px}
+  .empty p{font-size:13.5px;line-height:1.6}
+  .err{color:var(--accent);background:#2a1a1a;padding:14px;border-radius:10px;font-size:13px;border:1px solid #4a2a2a}
+
+  /* ─ Adjust toggle ─ */
+  .adjust-bar{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .toggle{font-size:11.5px;color:var(--muted);cursor:pointer;user-select:none}
+  .toggle.active{color:var(--accent2)}
+  .hidden{display:none}
+
+  details summary{cursor:pointer;color:var(--accent2);font-size:11px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🎬 MindRead V3</h1>
+  <span class="badge" id="health-badge">connecting…</span>
+  <span class="stats" id="health-stats"></span>
+  <span style="flex:1"></span>
+  <select id="lang-select" style="background:#2c3245;color:var(--text);border:1px solid #3a3f4b;border-radius:6px;padding:4px 8px;font-size:12px;margin-right:8px">
+    <option value="de">🇩🇪 Deutsch</option>
+    <option value="en">🇬🇧 English</option>
+  </select>
+  <span class="stats" id="last-search"></span>
+</header>
+
+<!-- Primary input -->
+<div class="search-bar">
+  <input id="freetext" type="text" placeholder='Beschreibe was du sehen willst — z.B. „Filme wie John Wick aber lustiger" oder „düstere Rachegeschichte mit Happy End"…'>
+  <button class="btn" id="btn-search">Suchen</button>
+  <button class="btn secondary" id="btn-clear">Reset</button>
+</div>
+<div class="examples">
+  <span>Beispiele:</span>
+  <a class="example">Filme wie John Wick aber lustiger</a>
+  <a class="example">romantische Komödie zum Einschlafen</a>
+  <a class="example">düstere Sci-Fi mit moralischem Dilemma</a>
+  <a class="example">Filme wie Amélie</a>
+</div>
+
+<div class="layout">
+  <!-- LEFT: Adjustments (only used after first search to nudge the LLM intent) -->
+  <div class="sidebar">
+
+    <div class="panel">
+      <h2>Mix &amp; Filter <span class="count" id="mix-info"></span></h2>
+      <div class="triangle-mix">
+        <div><div class="label">Plot</div><div class="val" id="v-syn">50%</div></div>
+        <div><div class="label">Theme</div><div class="val" id="v-th">20%</div></div>
+        <div><div class="label">Emotion</div><div class="val" id="v-emo">30%</div></div>
+      </div>
+      <div class="sliders">
+        <div class="slider-row">
+          <label>Plot ↔ Theme</label>
+          <input type="range" id="s-syn" min="0" max="100" value="50">
+          <span class="v" id="vs-syn">50</span>
+        </div>
+        <div class="slider-row">
+          <label>↳ Emotion-Anteil</label>
+          <input type="range" id="s-emo" min="0" max="100" value="35">
+          <span class="v" id="vs-emo">35</span>
+        </div>
+        <div class="slider-row">
+          <label>Indie ↔ Mainstream</label>
+          <input type="range" id="s-pop" min="-100" max="100" value="0">
+          <span class="v" id="vs-pop">0</span>
+        </div>
+        <div class="slider-row">
+          <label>Min. Runtime</label>
+          <input type="range" id="s-rt" min="0" max="180" value="60">
+          <span class="v" id="vs-rt">60m</span>
+        </div>
+        <div class="slider-row">
+          <label>Jahr ab</label>
+          <input type="range" id="s-yr" min="1920" max="2026" value="1920">
+          <span class="v" id="vs-yr">∞</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Emotionen anpassen <span class="count" id="emo-info"></span></h2>
+      <div class="legend">
+        <span class="dot suggested"></span> vom LLM erkannt &nbsp;
+        <span class="dot selected"></span> deine Auswahl &nbsp;
+        <span class="dot avoid"></span> Avoid (Shift+Klick)
+      </div>
+      <div class="wheel-wrap">
+        <svg class="wheel" id="wheel" viewBox="-180 -180 360 360"></svg>
+      </div>
+      <h2 style="margin-top:8px">Wirkung <span class="count" id="wirk-info"></span></h2>
+      <div class="pills" id="wirkung-pills"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Themen / Genres <span class="count" id="theme-info"></span></h2>
+      <div class="pills" id="theme-pills" style="max-height:160px;overflow-y:auto"></div>
+    </div>
+
+    <div class="panel" id="adjust-panel" style="display:none">
+      <h2>Avoid <span class="count" id="avoid-info"></span></h2>
+      <div class="pills" id="avoid-pills"></div>
+    </div>
+
+    <div class="panel" id="providers-panel" style="display:none">
+      <h2>Streaming-Provider <span class="count" id="prov-info"></span></h2>
+      <div class="legend">Nur Filme zeigen, die auf den ausgewählten Diensten verfügbar sind (Region: DE)</div>
+      <div class="pills" id="provider-pills" style="max-height:140px;overflow-y:auto"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Referenz-Film (TMDB-ID)</h2>
+      <div style="display:flex;gap:6px">
+        <input id="ref-input" type="number" placeholder="z.B. 245891 (John Wick)"
+               style="flex:1;padding:8px;background:var(--panel2);border:1px solid #2a2e3c;color:var(--text);border-radius:6px;font-size:12px">
+        <button class="btn secondary" id="btn-ref" style="padding:6px 12px;font-size:11px">Suchen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Results -->
+  <div class="results" id="results">
+    <div class="empty">
+      <h2>Was möchtest du sehen?</h2>
+      <p>Tippe oben einen Satz — der LLM extrahiert die passenden Emotionen + Themen<br>
+         und du siehst das Ergebnis sofort. Mit den Reglern und dem Wheel links<br>
+         kannst du <b>nachjustieren</b> ohne neuen LLM-Call.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "";
+
+const PLUTCHIK = [
+  ["joy",          "var(--joy)",      ["contentment","joy","ecstasy"]],
+  ["love",         "var(--love)",     ["warmth","tenderness","love"]],
+  ["wonder",       "var(--wonder)",   ["curiosity","wonder","awe"]],
+  ["anticipation", "var(--antic)",    ["anticipation","thrill","excitement"]],
+  ["fear",         "var(--fear)",     ["dread","fear","terror"]],
+  ["sadness",      "var(--sadness)",  ["sadness","melancholy","grief"]],
+  ["anger",        "var(--anger)",    ["frustration","anger","rage"]],
+  ["darkness",     "var(--darkness)", ["disgust","horror","despair"]],
+];
+const WIRKUNG = ["cathartic","unsettling","bittersweet","haunting","comforting","inspiring"];
+const PLUTCHIK_TAGS = PLUTCHIK.flatMap(([_,__,tags]) => tags);
+
+const state = {
+  userEmo: {}, userTh: {},
+  userAvoidEmo: new Set(), userAvoidTh: new Set(),
+  suggEmo: {}, suggTh: {},
+  weights: {synopsis: 0.35, emotion: 0.35, theme: 0.30},
+  popularity: 0, runtimeMin: 60, yearMin: null,
+  lang: (navigator.language || "en").startsWith("de") ? "de" : "en",
+  labels: {},   // tag → translated label
+  lastQuery: "", lastSimilarTo: null,
+  ontology: null, hasSearched: false,
+  selectedProviders: new Set(),
+  tenantWhitelist: null,
+};
+
+// ─ Wheel build
+function buildWheel(){
+  const svg = document.getElementById("wheel");
+  svg.innerHTML = "";
+  const N = PLUTCHIK.length, segDeg = 360/N;
+  const radii = [55, 95, 135, 175];
+  const labelRadii = [76, 116, 156];
+  for(let i=0;i<N;i++){
+    const [family,color,tags] = PLUTCHIK[i];
+    const a0 = (i*segDeg - 90) * Math.PI/180;
+    const a1 = ((i+1)*segDeg - 90) * Math.PI/180;
+    for(let r=0;r<3;r++){
+      const tag = tags[r];
+      const ri = radii[r], ro = radii[r+1];
+      const seg = document.createElementNS("http://www.w3.org/2000/svg","path");
+      seg.setAttribute("d", arcPath(0,0,ri,ro,a0,a1));
+      seg.setAttribute("fill", color);
+      seg.classList.add("seg");
+      seg.dataset.tag = tag;
+      seg.dataset.weight = (r===0?0.2:r===1?0.3:0.5);
+      seg.addEventListener("click", e => onTagClick(seg, tag, +seg.dataset.weight, e));
+      svg.appendChild(seg);
+      const ang = (a0+a1)/2, lr = labelRadii[r];
+      const tx = Math.cos(ang)*lr, ty = Math.sin(ang)*lr;
+      const txt = document.createElementNS("http://www.w3.org/2000/svg","text");
+      txt.setAttribute("x", tx); txt.setAttribute("y", ty); txt.setAttribute("dy","3");
+      const display = lbl(tag);
+      txt.textContent = display.length > 11 ? display.slice(0,9)+"…" : display;
+      svg.appendChild(txt);
+    }
+  }
+  const cl = document.createElementNS("http://www.w3.org/2000/svg","text");
+  cl.setAttribute("class","ctr-label"); cl.setAttribute("y","4");
+  cl.textContent = "Plutchik · 24"; svg.appendChild(cl);
+}
+function arcPath(cx,cy,r0,r1,a0,a1){
+  const x0=cx+r0*Math.cos(a0),y0=cy+r0*Math.sin(a0);
+  const x1=cx+r1*Math.cos(a0),y1=cy+r1*Math.sin(a0);
+  const x2=cx+r1*Math.cos(a1),y2=cy+r1*Math.sin(a1);
+  const x3=cx+r0*Math.cos(a1),y3=cy+r0*Math.sin(a1);
+  const lg = (a1-a0) > Math.PI ? 1 : 0;
+  return `M ${x0} ${y0} L ${x1} ${y1} A ${r1} ${r1} 0 ${lg} 1 ${x2} ${y2} L ${x3} ${y3} A ${r0} ${r0} 0 ${lg} 0 ${x0} ${y0} Z`;
+}
+
+// ─ Pills (wirkung + themes)
+function buildWirkungPills(){
+  const c = document.getElementById("wirkung-pills"); c.innerHTML = "";
+  WIRKUNG.forEach(t => c.appendChild(makePill(t, 0.3)));
+}
+async function loadOntology(){
+  state.ontology = await (await fetch(`${API}/api/ontology?lang=${state.lang}`)).json();
+  state.labels = state.ontology.labels || {};
+  buildThemePills();
+}
+function lbl(tag){ return state.labels[tag] || tag; }
+function buildThemePills(){
+  const c = document.getElementById("theme-pills"); c.innerHTML = "";
+  [...state.ontology.buckets.plot_themes, ...state.ontology.buckets.genres].forEach(t =>
+    c.appendChild(makePill(t, 0.3, /*isTheme*/ true)));
+}
+function makePill(tag, defaultWeight, isTheme=false){
+  const p = document.createElement("span");
+  p.className = "pill"; p.textContent = lbl(tag); p.dataset.tag = tag; p.dataset.theme = isTheme ? "1" : "0";
+  p.addEventListener("click", e => onTagClick(p, tag, defaultWeight, e, isTheme));
+  return p;
+}
+
+function onTagClick(el, tag, w, ev, isTheme=false){
+  const isThemeTag = isTheme || (state.ontology && (
+    state.ontology.buckets.plot_themes.includes(tag) || state.ontology.buckets.genres.includes(tag)));
+  const userBag = isThemeTag ? state.userTh : state.userEmo;
+  const avoidSet = isThemeTag ? state.userAvoidTh : state.userAvoidEmo;
+  if(ev.shiftKey){
+    if(avoidSet.has(tag)) avoidSet.delete(tag); else avoidSet.add(tag);
+    delete userBag[tag];
+  } else {
+    if(tag in userBag) delete userBag[tag];
+    else { userBag[tag] = w; avoidSet.delete(tag); }
+  }
+  render();
+}
+
+// ─ Render selection state on wheel + pills
+function render(){
+  const allSel = (t) => (t in state.userEmo) || (t in state.userTh);
+  const sugEmo = state.suggEmo, sugTh = state.suggTh;
+  document.querySelectorAll("svg.wheel .seg").forEach(s => {
+    const t = s.dataset.tag;
+    s.classList.toggle("selected", t in state.userEmo);
+    s.classList.toggle("suggested", !(t in state.userEmo) && (t in sugEmo) && !state.userAvoidEmo.has(t));
+    s.classList.toggle("avoid", state.userAvoidEmo.has(t));
+  });
+  document.querySelectorAll(".pill").forEach(p => {
+    const t = p.dataset.tag, isTheme = p.dataset.theme === "1";
+    if(isTheme){
+      p.classList.toggle("selected", t in state.userTh);
+      p.classList.toggle("suggested", !(t in state.userTh) && (t in sugTh) && !state.userAvoidTh.has(t));
+      p.classList.toggle("avoid", state.userAvoidTh.has(t));
+    } else {
+      p.classList.toggle("selected", t in state.userEmo);
+      p.classList.toggle("suggested", !(t in state.userEmo) && (t in sugEmo) && !state.userAvoidEmo.has(t));
+      p.classList.toggle("avoid", state.userAvoidEmo.has(t));
+    }
+  });
+  // Counts
+  const eN = Object.keys(state.userEmo).length;
+  const sEmoN = Object.keys(sugEmo).length;
+  const tN = Object.keys(state.userTh).length;
+  const sTh = Object.keys(sugTh).length;
+  document.getElementById("emo-info").textContent =
+    eN ? `${eN} eigene · ${sEmoN} vorgeschlagen` : (sEmoN ? `${sEmoN} vorgeschlagen` : "");
+  document.getElementById("theme-info").textContent =
+    tN ? `${tN} eigene · ${sTh} vorgeschlagen` : (sTh ? `${sTh} vorgeschlagen` : "");
+  document.getElementById("wirk-info").textContent =
+    Object.keys(state.userEmo).filter(t => WIRKUNG.includes(t)).length || "";
+  // Avoid panel
+  const avAll = [...state.userAvoidEmo, ...state.userAvoidTh];
+  document.getElementById("adjust-panel").style.display = avAll.length ? "block" : "none";
+  document.getElementById("avoid-info").textContent = avAll.length;
+  const ac = document.getElementById("avoid-pills"); ac.innerHTML = "";
+  avAll.forEach(t => {
+    const p = document.createElement("span"); p.className="pill avoid"; p.textContent="✗ "+t;
+    p.addEventListener("click", () => {
+      state.userAvoidEmo.delete(t); state.userAvoidTh.delete(t); render();
+    });
+    ac.appendChild(p);
+  });
+}
+
+// ─ Sliders
+function setupSliders(){
+  const sSyn=$("s-syn"), sEmo=$("s-emo"), sPop=$("s-pop"), sRt=$("s-rt"), sYr=$("s-yr");
+  function recalc(){
+    const syn=+sSyn.value, emo=+sEmo.value;
+    const remain = (100-emo)/100;
+    const wSyn = (syn/100)*remain, wTh = (1-syn/100)*remain, wEmo = emo/100;
+    const t = wSyn+wTh+wEmo || 1;
+    state.weights = { synopsis:wSyn/t, emotion:wEmo/t, theme:wTh/t };
+    $("v-syn").textContent = (state.weights.synopsis*100).toFixed(0)+"%";
+    $("v-emo").textContent = (state.weights.emotion*100).toFixed(0)+"%";
+    $("v-th").textContent  = (state.weights.theme*100).toFixed(0)+"%";
+    $("vs-syn").textContent = sSyn.value; $("vs-emo").textContent = sEmo.value;
+    state.popularity = (+sPop.value)/100;
+    $("vs-pop").textContent = sPop.value > 0 ? "+"+sPop.value : sPop.value;
+    state.runtimeMin = +sRt.value; $("vs-rt").textContent = sRt.value+"m";
+    state.yearMin = (+sYr.value === 1920) ? null : +sYr.value;
+    $("vs-yr").textContent = state.yearMin ? state.yearMin : "∞";
+  }
+  [sSyn,sEmo,sPop,sRt,sYr].forEach(s => s.addEventListener("input", recalc));
+  recalc();
+}
+const $ = id => document.getElementById(id);
+
+// ─ Search
+async function doSearch(){
+  const text = $("freetext").value.trim();
+  const ref = $("ref-input").value.trim();
+  const newSimilarTo = ref ? parseInt(ref) : null;
+  const userHasAdjusted = Object.keys(state.userEmo).length || Object.keys(state.userTh).length;
+  const queryChanged = text !== state.lastQuery;
+  const refChanged = newSimilarTo !== state.lastSimilarTo;
+  const haveCachedIntent = Object.keys(state.suggEmo).length > 0;
+
+  const body = {
+    limit: 15,
+    lang: state.lang,
+    w_synopsis: state.weights.synopsis,
+    w_emotion: state.weights.emotion,
+    w_theme: state.weights.theme,
+    indie_mainstream: state.popularity,
+    runtime_min: state.runtimeMin,
+    year_min: state.yearMin,
+    avoid_emotions: Array.from(state.userAvoidEmo),
+    avoid_themes: Array.from(state.userAvoidTh),
+    streaming_providers: Array.from(state.selectedProviders),
+  };
+
+  let willCallLLM = false;
+  if(newSimilarTo){
+    body.similar_to = newSimilarTo;
+  } else if(text && (queryChanged || !haveCachedIntent) && !userHasAdjusted){
+    // First time we see this text → LLM needed
+    body.query = text;
+    willCallLLM = true;
+  } else if(haveCachedIntent || userHasAdjusted){
+    // Reuse: LLM-suggestions as base, user's wheel-edits override
+    body.adjusted_emotions = {...state.suggEmo, ...state.userEmo};
+    body.adjusted_themes   = {...state.suggTh,  ...state.userTh};
+    if(text) body.query = text;   // synopsis vec still uses text
+  } else if(text){
+    body.query = text;
+    willCallLLM = true;
+  } else {
+    showError("Tippe einen Suchsatz oder gib eine Film-ID an.");
+    return;
+  }
+
+  state.lastSimilarTo = newSimilarTo;
+  state.lastQuery = text;
+
+  showLoading(willCallLLM ? "🧠 LLM extrahiert Intent…" : "⚡ Aktualisiere (kein LLM-Call)…");
+  const t0 = performance.now();
+  try{
+    const r = await fetch(`${API}/api/search`, {
+      method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body),
+    });
+    if(!r.ok){ throw new Error(`HTTP ${r.status}: ${(await r.text()).slice(0,300)}`); }
+    const data = await r.json();
+    // Update suggestions
+    if(data.intent){
+      state.suggEmo = data.intent.emotion_sparse || {};
+      state.suggTh = data.intent.theme_sparse || {};
+    }
+    state.hasSearched = true;
+    render();
+    renderResults(data, performance.now()-t0);
+  }catch(e){ showError(e.message); }
+}
+
+function showLoading(msg){
+  $("results").innerHTML = `<div class="empty"><div style="font-size:24px">⏳</div><p>${msg}</p></div>`;
+}
+function showError(msg){
+  $("results").innerHTML = `<div class="err">⚠ ${msg}</div>`;
+}
+
+function renderResults(data, totalMs){
+  const c = $("results"); c.innerHTML = "";
+
+  // Compute relative scores 0-100 against the top hit
+  const top = (data.results[0] || {}).score || 1;
+  data.results.forEach(r => { r._pct = Math.round(100 * (r.score / top)); });
+
+  // Meta line
+  const meta = document.createElement("div"); meta.className = "result-meta";
+  const intentBlurb = data.intent ?
+    `<details><summary>Intent vom LLM</summary>
+      <div style="margin-top:6px;font-family:ui-monospace,Menlo,monospace;font-size:10.5px">
+        emo: ${Object.entries(data.intent.emotion_sparse).map(([k,v])=>k+" "+(v*100).toFixed(0)+"%").join(" · ")}<br>
+        thm: ${Object.entries(data.intent.theme_sparse).map(([k,v])=>k+" "+(v*100).toFixed(0)+"%").join(" · ")}<br>
+        avoid: ${data.intent.avoid_emotions.join(", ")||"—"} / ${data.intent.avoid_themes.join(", ")||"—"}
+      </div></details>` : "";
+  const refLine = data.reference_title ? `<span class="lbl">Wie:</span> ${data.reference_title}` :
+                  data.query ? `<span class="lbl">Query:</span> "${data.query}"` : "";
+  meta.innerHTML = `
+    <div>${refLine}</div>
+    <div>
+      <span style="margin-right:12px"><b>${data.results.length}</b> Treffer</span>
+      <span style="margin-right:12px">${data.search_time_ms}ms server · ${totalMs.toFixed(0)}ms total</span>
+      ${intentBlurb}
+    </div>`;
+  c.appendChild(meta);
+
+  $("last-search").textContent = `${data.results.length} Treffer · ${data.search_time_ms}ms`;
+
+  data.results.forEach((r,i) => c.appendChild(renderResultCard(r, i)));
+}
+
+function renderResultCard(r, idx){
+  const div = document.createElement("div"); div.className = "result";
+  const poster = r.poster_path
+    ? `<img class="poster" src="https://image.tmdb.org/t/p/w185${r.poster_path}" alt="">`
+    : `<div class="poster placeholder">🎞</div>`;
+
+  const why = [];
+  (r.match_emotions||[]).slice(0,3).forEach(m => {
+    why.push(`<span class="why-tag" title="query ${(m.query_weight*100).toFixed(0)}% × film ${(m.film_weight*100).toFixed(0)}% = ${(m.contribution*100).toFixed(1)}%">🎭 ${m.tag}</span>`);
+  });
+  (r.match_themes||[]).slice(0,3).forEach(m => {
+    why.push(`<span class="why-tag" title="query ${(m.query_weight*100).toFixed(0)}% × film ${(m.film_weight*100).toFixed(0)}% = ${(m.contribution*100).toFixed(1)}%">📚 ${m.tag}</span>`);
+  });
+
+  const dnaTags = [];
+  Object.entries(r.emotion_dna||{}).sort((a,b)=>b[1]-a[1]).slice(0,3).forEach(([k,v])=>
+    dnaTags.push(`<span class="dna-tag">${k} ${(v*100).toFixed(0)}%</span>`));
+  Object.entries(r.theme_dna||{}).sort((a,b)=>b[1]-a[1]).slice(0,3).forEach(([k,v])=>
+    dnaTags.push(`<span class="dna-tag">${k} ${(v*100).toFixed(0)}%</span>`));
+
+  const channels = Object.entries(r.channels||{}).map(([k,v])=>`${k.slice(0,3)}:${v.toFixed(2)}`).join(" · ");
+
+  const meta = [
+    (r.genres||[]).slice(0,3).join(" · "),
+    r.archetype,
+    r.protagonist_gender,
+    r.runtime ? r.runtime+"min" : null,
+    r.vote_average ? "⭐ "+r.vote_average.toFixed(1) : null,
+    r.vote_count ? r.vote_count.toLocaleString()+" votes" : null,
+  ].filter(Boolean).join(" · ");
+
+  div.innerHTML = `
+    ${poster}
+    <div class="body">
+      <h3><span class="rank">#${idx+1}</span>${r.title}<span class="year">(${r.year||"?"})</span></h3>
+      <div class="meta-line">${meta}</div>
+      <div class="overview">${r.overview||""}</div>
+      <div class="why">
+        ${why.length ? `<span class="why-label">match:</span>` : ""}
+        ${why.join("")}
+      </div>
+      <div class="why">${dnaTags.join("")}</div>
+      <div class="footer">
+        <div>
+          <span class="score-big" title="Match-Stärke relativ zum besten Treffer">${r._pct}% Match</span>
+          <span class="channels-mini" title="Roh-Score: ${r.score.toFixed(4)} | RRF-Beiträge pro Kanal">${channels}</span>
+        </div>
+        <button class="btn-similar" data-id="${r.tmdb_id}">Wie dieser →</button>
+      </div>
+    </div>`;
+  div.querySelector(".btn-similar").addEventListener("click", () => {
+    $("ref-input").value = r.tmdb_id; $("freetext").value = "";
+    state.userEmo = {}; state.userTh = {}; state.userAvoidEmo.clear(); state.userAvoidTh.clear();
+    doSearch();
+  });
+  return div;
+}
+
+function resetAll(){
+  state.userEmo = {}; state.userTh = {}; state.userAvoidEmo.clear(); state.userAvoidTh.clear();
+  state.suggEmo = {}; state.suggTh = {}; state.lastQuery = ""; state.lastSimilarTo = null;
+  state.hasSearched = false;
+  $("freetext").value = ""; $("ref-input").value = "";
+  // Reset sliders to balanced default
+  $("s-syn").value = 50; $("s-emo").value = 35; $("s-pop").value = 0;
+  $("s-rt").value = 60; $("s-yr").value = 1920;
+  $("s-syn").dispatchEvent(new Event("input"));
+  render();
+  $("results").innerHTML = '<div class="empty"><h2>Was möchtest du sehen?</h2><p>Tippe einen Suchsatz oder gib eine Film-ID an.</p></div>';
+  $("last-search").textContent = "";
+}
+
+async function checkHealth(){
+  try{
+    // Cache-bust so the count is always fresh on reload (some browsers cache JSON aggressively)
+    const d = await (await fetch(`${API}/api/health?t=${Date.now()}`,
+                                  {cache: "no-store"})).json();
+    $("health-badge").textContent = "✓ online";
+    const indexed = (d.points || 0).toLocaleString();
+    const pending = d.pending_reindex || 0;
+    const total = (d.extracted_total || 0).toLocaleString();
+    let txt = `${indexed} Filme indiziert`;
+    if (pending > 0) {
+      txt += ` · ${pending.toLocaleString()} extrahiert wartend (gesamt ${total})`;
+    }
+    $("health-stats").textContent = txt;
+    $("health-stats").title = `Indiziert (live searchable): ${indexed}\n` +
+      `Extrahiert (DNA fertig, noch nicht in Qdrant): ${total}\n` +
+      `Reindex bringt ${pending} weitere Filme online.`;
+    state.tenantWhitelist = (d.tenant_providers_allowed && d.tenant_providers_allowed !== "all")
+      ? d.tenant_providers_allowed : null;
+  }catch(e){ $("health-badge").textContent = "⚠ offline"; }
+}
+
+async function loadProviders(){
+  try{
+    const d = await (await fetch(`${API}/api/providers`)).json();
+    const provs = (d.providers || []).filter(p => p.film_count >= 5);  // hide tiny ones
+    if(provs.length === 0) return;
+    $("providers-panel").style.display = "block";
+    const c = $("provider-pills"); c.innerHTML = "";
+    provs.slice(0, 20).forEach(p => {  // top-20 most-stocked
+      const el = document.createElement("span");
+      el.className = "pill";
+      el.textContent = `${p.name} (${p.film_count})`;
+      el.dataset.provider = p.name;
+      el.addEventListener("click", () => {
+        if(state.selectedProviders.has(p.name)) state.selectedProviders.delete(p.name);
+        else state.selectedProviders.add(p.name);
+        el.classList.toggle("selected");
+        updateProviderInfo();
+      });
+      c.appendChild(el);
+    });
+    if(state.tenantWhitelist){
+      const note = document.createElement("div");
+      note.className = "legend";
+      note.style.color = "var(--accent2)";
+      note.textContent = `Tenant: ${state.tenantWhitelist.join(", ")} (andere Provider versteckt)`;
+      c.parentNode.insertBefore(note, c);
+    }
+  }catch(e){ /* ignore */ }
+}
+function updateProviderInfo(){
+  const n = state.selectedProviders.size;
+  $("prov-info").textContent = n ? `${n} ausgewählt` : "";
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  buildWheel();
+  buildWirkungPills();
+  setupSliders();
+  await loadOntology();
+  await checkHealth();
+  loadProviders();    // async, fills panel when done
+  $("btn-search").addEventListener("click", doSearch);
+  $("freetext").addEventListener("keydown", e => { if(e.key==="Enter") doSearch(); });
+  $("ref-input").addEventListener("keydown", e => { if(e.key==="Enter") doSearch(); });
+  $("btn-ref").addEventListener("click", doSearch);
+  $("btn-clear").addEventListener("click", resetAll);
+  document.querySelectorAll(".example").forEach(a => a.addEventListener("click", () => {
+    $("freetext").value = a.textContent; $("ref-input").value = ""; doSearch();
+  }));
+  // Language switcher
+  $("lang-select").value = state.lang;
+  $("lang-select").addEventListener("change", async e => {
+    state.lang = e.target.value;
+    await loadOntology();    // pull new labels
+    buildWheel();             // rebuild wheel with translated labels
+    buildWirkungPills();
+    render();
+    if(state.hasSearched) doSearch();    // re-render results in new lang
+  });
+  render();
+});
+</script>
+</body>
+</html>
