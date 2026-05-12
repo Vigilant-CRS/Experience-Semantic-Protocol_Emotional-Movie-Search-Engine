@@ -64,6 +64,7 @@ from scripts.extract_dna_v3 import (
     normalize_l1, build_query_user_prompt, parse_query_dna,
     load_env, OPENAI_MODEL,
 )
+from scripts.llm_providers import make_provider, LLMProvider
 
 LOCAL_LLM_ENABLED = os.environ.get("LOCAL_LLM_ENABLED", "0") == "1"
 
@@ -83,6 +84,16 @@ load_env()
 ONT = load_ontology()
 EMOTION_IDX, THEME_IDX = load_indices()
 SYSTEM_PROMPT = build_system_prompt(ONT)
+
+# Default LLM provider, built from env once at startup.
+# Customer chooses via LLM_PROVIDER=openai|anthropic|local (or legacy
+# LOCAL_LLM_ENABLED=1 still works).
+try:
+    LLM_PROVIDER: Optional[LLMProvider] = make_provider()
+    LLM_PROVIDER_LABEL = LLM_PROVIDER.label
+except Exception as _e:
+    LLM_PROVIDER = None
+    LLM_PROVIDER_LABEL = f"<provider init failed: {_e}>"
 QDRANT = QdrantClient(host=os.getenv("QDRANT_HOST", "localhost"),
                       port=int(os.getenv("QDRANT_PORT", "6333")), timeout=30.0)
 QDRANT_URL = f"http://{os.getenv('QDRANT_HOST','localhost')}:{os.getenv('QDRANT_PORT','6333')}"
@@ -269,36 +280,27 @@ class SearchResponse(BaseModel):
 
 # ─── LLM helper for free-text ─────────────────────────────────────────────
 def llm_query_to_dna(query: str) -> Dict[str, Any]:
-    """Run LLM (OpenAI or local Qwen) on the free-text query, extract DNA-like dict.
-    Provider chosen via LOCAL_LLM_ENABLED env var.
+    """Extract DNA-like dict from a free-text query via configured LLMProvider.
 
-    Prompt and post-processing live in extract_dna_v3.py
-    (`build_query_user_prompt` + `parse_query_dna`) so api_v3, llm_local and
-    search_v3 CLI all share the same logic (audit F-006).
+    Provider selected at startup from env (LLM_PROVIDER + LLM_API_KEY +
+    LLM_MODEL or legacy OPENAI_* / LOCAL_LLM_ENABLED).  Prompt-builder
+    `build_query_user_prompt` and post-processor `parse_query_dna` are in
+    extract_dna_v3.py so all callers share the same logic (audit F-006).
     """
-    if LOCAL_LLM_ENABLED:
-        from scripts.llm_local import llm_query_to_dna_local
-        return llm_query_to_dna_local(query, SYSTEM_PROMPT, ONT)
-    # OpenAI path
-    is_new = ("gpt-5" in OPENAI_MODEL) or OPENAI_MODEL.startswith(("o3", "o4", "o1"))
+    if LLM_PROVIDER is None:
+        raise HTTPException(status_code=503,
+                            detail=f"LLM provider not initialized: {LLM_PROVIDER_LABEL}")
     user = build_query_user_prompt(query)
-    body = {
-        "model": OPENAI_MODEL,
-        "messages": [{"role": "system", "content": SYSTEM_PROMPT},
-                     {"role": "user", "content": user}],
-        ("max_completion_tokens" if is_new else "max_tokens"): 1500,
-        "response_format": {"type": "json_object"},
-    }
-    if not is_new:
-        body["temperature"] = 0.1
-    r = requests.post("https://api.openai.com/v1/chat/completions",
-                      headers={"Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}",
-                               "Content-Type": "application/json"},
-                      json=body, timeout=60)
-    if r.status_code != 200:
+    try:
+        text = LLM_PROVIDER.chat(SYSTEM_PROMPT, user, max_tokens=1500, temperature=0.1)
+    except Exception as e:
         raise HTTPException(status_code=502,
-                            detail=f"LLM call failed: {r.status_code} {r.text[:200]}")
-    raw = json.loads(r.json()["choices"][0]["message"]["content"])
+                            detail=f"LLM call failed ({LLM_PROVIDER_LABEL}): {type(e).__name__}: {str(e)[:200]}")
+    try:
+        raw = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=502,
+                            detail=f"LLM returned invalid JSON ({LLM_PROVIDER_LABEL}): {e}")
     return parse_query_dna(raw, query, ONT, CONTENT_FEATURES_TAGS)
 
 
@@ -323,7 +325,7 @@ def health():
             "extracted_total": extracted,
             "pending_reindex": max(0, extracted - indexed),
             "ontology_buckets": {k: len(v) for k, v in ONTOLOGY_BUCKETS.items()},
-            "llm": "local-qwen" if LOCAL_LLM_ENABLED else OPENAI_MODEL,
+            "llm": LLM_PROVIDER_LABEL,
             "tenant_providers_allowed": TENANT_PROVIDERS_ALLOWED or "all",
         }
     except Exception as e:
@@ -475,11 +477,32 @@ def admin_ingest_films(req: IngestRequest):
             elapsed_ms=int((time.time() - t0) * 1000),
         )
 
-    # Decide LLM caller
-    use_local = LOCAL_LLM_ENABLED if req.use_local_llm is None else req.use_local_llm
-    from scripts.extract_dna_v3 import extract_one, call_openai, call_local
-    caller = call_local if use_local else call_openai
-    log.info(f"admin_ingest_films: {len(todo)} films, llm={'local' if use_local else 'openai'}")
+    # Decide LLM caller. Default = the api-wide provider. The per-call
+    # `use_local_llm` flag overrides to local Qwen (useful when the customer
+    # runs the api against OpenAI for queries but wants free GPU-Qwen for
+    # the heavier ingest pass).
+    from scripts.extract_dna_v3 import extract_one
+    if req.use_local_llm is True:
+        from scripts.llm_providers import LocalLlamaCppProvider
+        ingest_provider = LocalLlamaCppProvider()
+    elif req.use_local_llm is False:
+        # Force the OpenAI-compatible path independent of LLM_PROVIDER
+        from scripts.llm_providers import OpenAICompatibleProvider
+        ingest_provider = OpenAICompatibleProvider(
+            api_key=os.environ.get("OPENAI_API_KEY") or os.environ.get("LLM_API_KEY") or "",
+            base_url=os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1",
+            model=os.environ.get("OPENAI_MODEL_DNA") or "gpt-5-mini",
+        )
+    else:
+        if LLM_PROVIDER is None:
+            raise HTTPException(503, f"No LLM provider available: {LLM_PROVIDER_LABEL}")
+        ingest_provider = LLM_PROVIDER
+
+    def _caller(system: str, user: str) -> Dict[str, Any]:
+        text = ingest_provider.chat(system, user, max_tokens=1500, temperature=0.1)
+        return json.loads(text)
+
+    log.info(f"admin_ingest_films: {len(todo)} films via {ingest_provider.label}")
 
     # Extract DNA
     records: List[Dict[str, Any]] = []
@@ -487,7 +510,7 @@ def admin_ingest_films(req: IngestRequest):
     for f in todo:
         try:
             film_dict = f.model_dump(exclude_none=True)
-            rec = extract_one(film_dict, SYSTEM_PROMPT, ONT, caller=caller)
+            rec = extract_one(film_dict, SYSTEM_PROMPT, ONT, caller=_caller)
             records.append(rec)
         except Exception as e:
             errors.append({"tmdb_id": f.tmdb_id, "title": f.title,
