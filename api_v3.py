@@ -891,8 +891,19 @@ def search(req: SearchRequest):
         if SCHEMA_VERSION < 2:
             query_th.update(dna.get("subjects") or {})
 
-        # If LLM detected "wie X" reference, try to resolve title → DNA
+        # Reference-film resolution. Two paths:
+        #   1) LLM detected similar_to_title (preferred)
+        #   2) LLM didn't, but the raw query EXACTLY matches a known film title
+        #      → engine-side fallback (catches "Fight Club", "Amélie" etc.
+        #      when typed alone; user UX expectation is to find that film + neighbors)
         ref_title = dna.get("similar_to_title")
+        if not ref_title:
+            fb = _find_film_by_title(req.query)
+            if fb is not None:
+                fb_title = (fb.payload or {}).get("title")
+                if fb_title:
+                    ref_title = fb_title
+                    log.info(f"Engine-side title fallback: query={req.query!r} → {fb_title!r}")
         ref_dna_used = False
         if ref_title:
             ref_film = _find_film_by_title(ref_title)

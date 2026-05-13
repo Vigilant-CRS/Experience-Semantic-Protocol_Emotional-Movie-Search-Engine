@@ -189,20 +189,42 @@ the SUBJECTS bucket above. This is the strongest signal for "give me films ABOUT
   - "Found-Footage Horror" → subjects={{"found_footage": 0.6}}, themes={{"Horror": 0.4}}
   - "Biopic über Musiker" → subjects={{"biopic": 0.6, "music_performance": 0.4}}
 
-CRITICAL — "wie X aber Y" / "like X but Y" handling:
-  When the user references a film AND a transformation ("aber X", "but with X",
-  "nur X", "more X", "less X"), the emotions/themes you output must reflect ONLY
-  the SHIFT/MODIFIER, NOT the reference film's DNA. The reference film's full DNA
-  will be loaded separately from `similar_to_title`. Your job is to encode the DELTA.
+CRITICAL — Reference-film detection (3 cases):
 
-  Examples:
-   - "Filme wie Amélie aber mit mehr Action" → similar_to_title="Amélie",
-     emotions={{excitement: 0.5, anticipation: 0.5}}, themes={{Action: 0.7, Adventure: 0.3}}
-     (do NOT include joy/wonder/Amélie tags — they come from the reference)
-   - "John Wick aber lustiger" → similar_to_title="John Wick",
-     emotions={{joy: 0.5, amusement: 0.5}}, themes={{Comedy: 1.0}}
-   - "Inception aber emotional" → similar_to_title="Inception",
-     emotions={{grief: 0.4, tenderness: 0.4, melancholy: 0.2}}, themes={{}}
+  Case A — Pure film title only (no "wie", no "aber"):
+    The query IS a film title and nothing else. Set similar_to_title and
+    leave emotions/themes/subjects empty — the engine will use the reference
+    film's stored DNA directly.
+    Examples:
+      "Fight Club"     → similar_to_title="Fight Club",   emotions={{}}, themes={{}}
+      "Amélie"         → similar_to_title="Amélie",       emotions={{}}, themes={{}}
+      "Die Hard"       → similar_to_title="Die Hard",     emotions={{}}, themes={{}}
+      "Im Auftrag des Teufels" → similar_to_title="The Devil's Advocate", emotions={{}}, themes={{}}
+
+  Case B — "wie X" / "like X" (similar, no modifier):
+    User wants films similar to X. Same handling as Case A — let the
+    engine use the reference's DNA.
+    Examples:
+      "Filme wie Inception"  → similar_to_title="Inception", emotions={{}}, themes={{}}
+      "like John Wick"        → similar_to_title="John Wick", emotions={{}}, themes={{}}
+
+  Case C — "wie X aber Y" (similar to X with modifier Y):
+    Reference + transformation. emotions/themes/subjects you output must
+    reflect ONLY the MODIFIER Y, NOT the reference film's DNA. The engine
+    blends 60% reference DNA + 40% your modifier signal.
+    Examples:
+      "Filme wie Amélie aber mit mehr Action" → similar_to_title="Amélie",
+        emotions={{excitement: 0.5, anticipation: 0.5}}, themes={{Action: 0.7, Adventure: 0.3}}
+        (do NOT include joy/wonder/Amélie tags — they come from the reference)
+      "John Wick aber lustiger" → similar_to_title="John Wick",
+        emotions={{joy: 0.5, amusement: 0.5}}, themes={{Comedy: 1.0}}
+      "Inception aber emotional" → similar_to_title="Inception",
+        emotions={{grief: 0.4, tenderness: 0.4, melancholy: 0.2}}, themes={{}}
+
+  Case D — Topic/subject/mood query (NO reference film):
+    Set similar_to_title=null and fill emotions/themes/subjects normally.
+    Examples: "Mafiafilme", "düstere Rachegeschichte", "feel-good Sci-Fi",
+              "Action mit weiblicher Hauptrolle".
 
 Additional fields:
   "translated_query": "<English translation of the user's query>"
