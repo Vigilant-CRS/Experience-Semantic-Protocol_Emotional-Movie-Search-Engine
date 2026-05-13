@@ -18,7 +18,7 @@
 #
 # Bump to 2 only when ready to reindex from scratch.
 schema:
-  version: 1
+  version: 2
 
 retrieval:
   # Default channel weights — slider initial positions.  Must each be in [0, 1].

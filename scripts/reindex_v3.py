@@ -294,10 +294,12 @@ def main():
     ap.add_argument("--recreate", action="store_true", help="drop existing collection")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--batch", type=int, default=64)
+    ap.add_argument("--source", type=str, default=str(SOURCE),
+                    help="JSON list of film metadata (default: movies_export.json — 7K)")
     args = ap.parse_args()
 
-    print("Loading data...")
-    movies = json.load(open(SOURCE))
+    print(f"Loading data from {args.source} ...")
+    movies = json.load(open(args.source))
     by_id = {m["tmdb_id"]: m for m in movies}
     dna = load_dna()
     print(f"  movies: {len(movies)}, DNA records: {len(dna)}")
@@ -306,6 +308,7 @@ def main():
     if args.limit:
         targets = targets[: args.limit]
     print(f"  films to index: {len(targets)}")
+    # Resume-skip applied after we know the collection state (see below).
 
     if not targets:
         print("Nothing to index.")
@@ -321,9 +324,26 @@ def main():
     model = SentenceTransformer(EMBEDDING_MODEL, device=device)
     print(f"  device: {model.device}")
 
-    # qdrant
-    client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=120.0)
+    # qdrant — longer timeout: large batches plus background indexing can
+    # block the HTTP response for >30s under load (audit 2026-05-12).
+    client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=300.0)
     setup_collection(client, args.recreate)
+
+    # Resume support: skip films already in the collection when not --recreate.
+    already_indexed = set()
+    if not args.recreate:
+        try:
+            offset = None
+            while True:
+                pts, offset = client.scroll(COLLECTION, limit=1000, offset=offset,
+                                             with_payload=False, with_vectors=False)
+                for p in pts:
+                    already_indexed.add(p.id)
+                if offset is None: break
+            print(f"Resume: {len(already_indexed)} films already in collection, will skip")
+        except Exception as e:
+            print(f"Resume scan failed ({e}); will re-upsert all")
+            already_indexed = set()
 
     schema_v = _schema_version_from_config()
     if schema_v >= 2:
@@ -333,6 +353,18 @@ def main():
         print(f"Schema v{schema_v}: legacy joint-L1 emotion, subjects-in-theme")
         emotion_to_idx, theme_to_idx = load_ontology_indices()
         subject_to_idx = None
+
+    # Apply resume-skip now that we have both `targets` and `already_indexed`
+    if already_indexed:
+        before = len(targets)
+        targets = [m for m in targets if m["tmdb_id"] not in already_indexed]
+        print(f"  resume-skip: {before - len(targets)} films already in Qdrant, "
+              f"{len(targets)} remaining")
+    if not targets:
+        print("Nothing left to index.")
+        info = client.get_collection(COLLECTION)
+        print(f"Collection {COLLECTION}: {info.points_count} points")
+        return
 
     # prepare batches: encode synopsis_dense, build sparse, upsert
     t0 = time.time()
@@ -428,13 +460,24 @@ def main():
                 }
             points.append(PointStruct(id=tid, vector=vectors, payload=payload))
 
-        client.upsert(collection_name=COLLECTION, points=points, wait=False)
+        # wait=True forces Qdrant to acknowledge each batch before we move on.
+        # Slower per batch but eliminates the timeout-overload pattern we hit
+        # at batch 47 with wait=False (audit 2026-05-12).
+        for attempt in range(3):
+            try:
+                client.upsert(collection_name=COLLECTION, points=points, wait=True)
+                break
+            except Exception as e:
+                if attempt == 2:
+                    raise
+                print(f"  ! upsert error attempt {attempt+1}/3: {type(e).__name__}, retrying in {2**attempt}s")
+                time.sleep(2 ** attempt)
         total_upserted += len(points)
         elapsed = time.time() - t0
         rate = total_upserted / max(elapsed, 1e-3)
         eta = (len(targets) - total_upserted) / max(rate, 1e-3)
         print(f"  batch {bi+1}/{n_batches}  upserted={total_upserted}/{len(targets)}  "
-              f"rate={rate:.1f}/s  eta={eta:.0f}s")
+              f"rate={rate:.1f}/s  eta={eta:.0f}s", flush=True)
 
     # wait for upserts to complete
     print("Waiting for Qdrant to flush...")
