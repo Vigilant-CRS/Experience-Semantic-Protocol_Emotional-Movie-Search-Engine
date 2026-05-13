@@ -837,6 +837,7 @@ def search(req: SearchRequest):
     subject_sparse = None    # schema v2 only
     intent: Optional[IntentInfo] = None
     reference_title: Optional[str] = None
+    ref_film = None            # resolved reference (free-text path) — pin to top below
     query_emo: Dict[str, float] = {}
     query_th: Dict[str, float] = {}
     query_subj: Dict[str, float] = {}
@@ -1114,7 +1115,27 @@ def search(req: SearchRequest):
         subject_sparse=subject_sparse,    # schema v2 only
     )
     if req.similar_to:
+        # similar_to via tmdb_id explicitly removes the reference itself
+        # (user wants OTHER films similar to this one).
         raw = [r for r in raw if r["id"] != req.similar_to]
+    elif ref_film is not None:
+        # Free-text query resolved to a reference film (e.g. user typed
+        # "Amélie" or "Fight Club"). UX expectation: show the reference
+        # itself at the top + neighbors below. Without this, single-channel
+        # sliders (e.g. Emotion=100%) can let a more-concentrated film
+        # outrank the reference on dot-product alone.
+        ref_id = ref_film.id
+        ref_entry = next((r for r in raw if r["id"] == ref_id), None)
+        if ref_entry is not None:
+            raw = [ref_entry] + [r for r in raw if r["id"] != ref_id]
+        else:
+            # Reference fell out of the fusion top-K (e.g. extreme slider
+            # config that doesn't favor any of its channels). Synthesize a
+            # minimal record from payload so the user still sees their film.
+            ref_payload = ref_film.payload or {}
+            ref_entry = {"id": ref_id, "payload": ref_payload,
+                         "channels": {}, "ranks": {}, "score": 0.0}
+            raw = [ref_entry] + raw
 
     # ── External ML boost (Variant B) ─────────────────────────────────────
     if req.external_score_boost and req.w_external > 0:
