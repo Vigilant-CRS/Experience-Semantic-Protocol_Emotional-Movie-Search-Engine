@@ -838,6 +838,7 @@ def search(req: SearchRequest):
     intent: Optional[IntentInfo] = None
     reference_title: Optional[str] = None
     ref_film = None            # resolved reference (free-text path) — pin to top below
+    has_modifier = False       # true when user typed "wie X aber Y" — DON'T pin reference
     query_emo: Dict[str, float] = {}
     query_th: Dict[str, float] = {}
     query_subj: Dict[str, float] = {}
@@ -891,6 +892,22 @@ def search(req: SearchRequest):
         }
         if SCHEMA_VERSION < 2:
             query_th.update(dna.get("subjects") or {})
+
+        # "Wie X aber Y" detection: an explicit "aber"/"but" marker in the
+        # raw query is the only safe signal (other words can be in titles —
+        # e.g. "Action Jackson" must NOT be classified as a modifier).
+        # The LLM signal is also used but with caveats: at temperature 0.1
+        # the LLM sometimes fills emotions/themes for pure references too.
+        import re as _re_mod
+        _modifier_marker_re = _re_mod.compile(r"\b(aber|but)\b", _re_mod.IGNORECASE)
+        has_modifier_kw = bool(_modifier_marker_re.search(req.query or ""))
+        # Avoid-list is a strong LLM signal regardless of "aber"
+        has_avoid_signal = bool(
+            (dna.get("avoid_emotions") or [])
+            or (dna.get("avoid_themes") or [])
+            or (dna.get("avoid_content") or [])
+        )
+        has_modifier = has_modifier_kw or has_avoid_signal
 
         # Reference-film resolution. Two paths:
         #   1) LLM detected similar_to_title (preferred)
@@ -1019,8 +1036,15 @@ def search(req: SearchRequest):
             filt = Filter(must=must)
             log.info(f"LLM-derived filters added: gender={dna.get('protagonist_gender')} "
                      f"year=[{dna.get('year_min')},{dna.get('year_max')}]")
-        # synopsis_vec: if reference resolved, use its stored vector; else encode TRANSLATED query text
-        if ref_dna_used and ref_film:
+        # Synopsis-channel selection:
+        #   - Pure "wie X" / single-title (no modifier): use reference's
+        #     stored synopsis_dense — perfect anchor on the reference's plot.
+        #   - "wie X aber Y" (has_modifier): encode the translated query so
+        #     the synopsis channel pulls toward the SHIFT direction, not the
+        #     reference's own synopsis (otherwise reference always wins
+        #     synopsis channel = always rank #1 regardless of modifier).
+        #   - No reference: encode translated/original query text.
+        if ref_dna_used and ref_film and not has_modifier:
             ref_pts = QDRANT.retrieve(COLLECTION, ids=[ref_film.id], with_vectors=True)
             if ref_pts and ref_pts[0].vector:
                 synopsis_vec = np.array(ref_pts[0].vector.get("synopsis_dense"))
@@ -1118,12 +1142,12 @@ def search(req: SearchRequest):
         # similar_to via tmdb_id explicitly removes the reference itself
         # (user wants OTHER films similar to this one).
         raw = [r for r in raw if r["id"] != req.similar_to]
+    elif ref_film is not None and has_modifier:
+        # "wie X aber Y": remove reference, user wants the SHIFT target,
+        # not the anchor itself. Same semantic as similar_to=tmdb_id.
+        raw = [r for r in raw if r["id"] != ref_film.id]
     elif ref_film is not None:
-        # Free-text query resolved to a reference film (e.g. user typed
-        # "Amélie" or "Fight Club"). UX expectation: show the reference
-        # itself at the top + neighbors below. Without this, single-channel
-        # sliders (e.g. Emotion=100%) can let a more-concentrated film
-        # outrank the reference on dot-product alone.
+        # Pure title query ("Amélie", "Fight Club") — pin reference to #1.
         ref_id = ref_film.id
         ref_entry = next((r for r in raw if r["id"] == ref_id), None)
         if ref_entry is not None:

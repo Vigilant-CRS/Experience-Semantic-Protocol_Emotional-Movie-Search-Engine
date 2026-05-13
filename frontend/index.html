@@ -171,14 +171,19 @@
       </div>
       <div class="sliders">
         <div class="slider-row">
-          <label>Plot ↔ Theme</label>
-          <input type="range" id="s-syn" min="0" max="100" value="50">
-          <span class="v" id="vs-syn">50</span>
+          <label>Plot (Synopsis)</label>
+          <input type="range" id="s-syn" min="0" max="100" value="35">
+          <span class="v" id="vs-syn">35%</span>
         </div>
         <div class="slider-row">
-          <label>↳ Emotion-Anteil</label>
+          <label>Emotion</label>
           <input type="range" id="s-emo" min="0" max="100" value="35">
-          <span class="v" id="vs-emo">35</span>
+          <span class="v" id="vs-emo">35%</span>
+        </div>
+        <div class="slider-row">
+          <label>Theme / Genre</label>
+          <input type="range" id="s-thm" min="0" max="100" value="30">
+          <span class="v" id="vs-thm">30%</span>
         </div>
         <div class="slider-row">
           <label>Indie ↔ Mainstream</label>
@@ -410,24 +415,57 @@ function render(){
 
 // ─ Sliders
 function setupSliders(){
-  const sSyn=$("s-syn"), sEmo=$("s-emo"), sPop=$("s-pop"), sRt=$("s-rt"), sYr=$("s-yr");
+  const sSyn=$("s-syn"), sEmo=$("s-emo"), sThm=$("s-thm"),
+        sPop=$("s-pop"), sRt=$("s-rt"), sYr=$("s-yr");
+  const three = [sSyn, sEmo, sThm];
+
+  // Σ=1 redistribution: when one channel slider changes, the other two
+  // shift proportionally to their current ratio so the total stays 100.
+  // If both "others" are at 0, distribute the remainder evenly.
+  let suppress = false;   // avoid recursive triggers during programmatic .value sets
+  function redistribute(changed) {
+    if (suppress) return;
+    const changedVal = +changed.value;
+    const others = three.filter(s => s !== changed);
+    const otherSum = (+others[0].value) + (+others[1].value);
+    const targetOtherSum = 100 - changedVal;
+    suppress = true;
+    if (otherSum <= 0) {
+      others[0].value = Math.round(targetOtherSum / 2);
+      others[1].value = targetOtherSum - (+others[0].value);
+    } else {
+      const ratio = targetOtherSum / otherSum;
+      others[0].value = Math.round((+others[0].value) * ratio);
+      others[1].value = targetOtherSum - (+others[0].value);
+      // clamp to [0,100] in case of rounding
+      if (+others[1].value < 0) { others[1].value = 0; others[0].value = targetOtherSum; }
+      if (+others[1].value > 100) { others[1].value = 100; others[0].value = 0; }
+    }
+    suppress = false;
+  }
+
   function recalc(){
-    const syn=+sSyn.value, emo=+sEmo.value;
-    const remain = (100-emo)/100;
-    const wSyn = (syn/100)*remain, wTh = (1-syn/100)*remain, wEmo = emo/100;
-    const t = wSyn+wTh+wEmo || 1;
-    state.weights = { synopsis:wSyn/t, emotion:wEmo/t, theme:wTh/t };
-    $("v-syn").textContent = (state.weights.synopsis*100).toFixed(0)+"%";
-    $("v-emo").textContent = (state.weights.emotion*100).toFixed(0)+"%";
-    $("v-th").textContent  = (state.weights.theme*100).toFixed(0)+"%";
-    $("vs-syn").textContent = sSyn.value; $("vs-emo").textContent = sEmo.value;
+    const syn=+sSyn.value, emo=+sEmo.value, thm=+sThm.value;
+    const tot = syn+emo+thm || 1;
+    state.weights = { synopsis: syn/tot, emotion: emo/tot, theme: thm/tot };
+    $("v-syn").textContent = Math.round(state.weights.synopsis*100)+"%";
+    $("v-emo").textContent = Math.round(state.weights.emotion*100)+"%";
+    $("v-th").textContent  = Math.round(state.weights.theme*100)+"%";
+    $("vs-syn").textContent = sSyn.value+"%";
+    $("vs-emo").textContent = sEmo.value+"%";
+    $("vs-thm").textContent = sThm.value+"%";
     state.popularity = (+sPop.value)/100;
     $("vs-pop").textContent = sPop.value > 0 ? "+"+sPop.value : sPop.value;
     state.runtimeMin = +sRt.value; $("vs-rt").textContent = sRt.value+"m";
     state.yearMin = (+sYr.value === 1920) ? null : +sYr.value;
     $("vs-yr").textContent = state.yearMin ? state.yearMin : "∞";
   }
-  [sSyn,sEmo,sPop,sRt,sYr].forEach(s => s.addEventListener("input", recalc));
+
+  three.forEach(s => s.addEventListener("input", () => {
+    redistribute(s);
+    recalc();
+  }));
+  [sPop, sRt, sYr].forEach(s => s.addEventListener("input", recalc));
   recalc();
 }
 const $ = id => document.getElementById(id);
@@ -600,10 +638,12 @@ function resetAll(){
   state.suggEmo = {}; state.suggTh = {}; state.lastQuery = ""; state.lastSimilarTo = null;
   state.hasSearched = false;
   $("freetext").value = ""; $("ref-input").value = "";
-  // Reset sliders to balanced default
-  $("s-syn").value = 50; $("s-emo").value = 35; $("s-pop").value = 0;
+  // Reset sliders to balanced default (35/35/30 — matches API default)
+  $("s-syn").value = 35; $("s-emo").value = 35; $("s-thm").value = 30;
+  $("s-pop").value = 0;
   $("s-rt").value = 60; $("s-yr").value = 1920;
-  $("s-syn").dispatchEvent(new Event("input"));
+  // Trigger recalc without triggering redistribute (already balanced)
+  $("s-pop").dispatchEvent(new Event("input"));
   render();
   $("results").innerHTML = '<div class="empty"><h2>Was möchtest du sehen?</h2><p>Tippe einen Suchsatz oder gib eine Film-ID an.</p></div>';
   $("last-search").textContent = "";
