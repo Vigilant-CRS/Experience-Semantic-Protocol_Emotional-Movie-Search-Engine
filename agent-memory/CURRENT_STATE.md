@@ -1,4 +1,28 @@
-# Current State — 2026-05-12
+# Current State — 2026-05-13 (Block C abgeschlossen)
+
+## 🎉 Schema v2 live, Korpus konsolidiert
+
+**Korpus:**
+- 15,255 Filme indexed (vorher 7,018)
+- 15,232 mit Poster, 7,622 mit DE-Provider, 13,322 mit DE-Overview
+- TITLE_INDEX: 18,918 keys (inkl. DE-Aliases)
+
+**Schema v2 (config/engine_params.yaml schema.version=2):**
+- emotion_sparse 30 dim — emotions(24) + wirkung(6) **separately L1-normalized** (F-016 ✓)
+- theme_sparse 88 dim — themes(35) + genres(18) + settings(15) + moods(12) + pacing(8)
+- subject_sparse 24 dim — **dedicated channel** mit eigenem w_subject Slider (F-017 ✓)
+- synopsis_dense 1024 dim — E5-large-v2
+
+**Empirische Qualitätsverbesserung:**
+| Query | Pre-v2 | Post-v2 |
+|---|---|---|
+| Vampirfilme | Devil's Due / Satanic / Howl | **Dracula / Vampires / Nosferatu** ✓ |
+| Mafia | One Hundred Steps / Infiltrator | One Hundred Steps / Criminal Activities / **The Godfather** |
+| "Action ohne Schusswaffen" | John Wick / Furious 7 / Rage 🐛 | **Baki Hanma / Fast&Furious / Shadow Master** (martial arts!) |
+
+**Cost dieses Schritts:** ~$3 (9172 Mini-Extract + 220 Full-Extract via OpenAI gpt-5.4-mini)
+
+# Current State — 2026-05-12 (Block A-B abgeschlossen — vorherig)
 
 ## ✅ Repair-Pass abgeschlossen 2026-05-12 (CMR-002b)
 
