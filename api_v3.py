@@ -910,9 +910,38 @@ def search(req: SearchRequest):
             if ref_film:
                 ref_payload = ref_film.payload or {}
                 reference_title = ref_payload.get("title")
-                # Blend: 60% reference film DNA + 40% LLM-extracted modifier
-                ref_emo = ref_payload.get("emotion_dna", {})
-                ref_th  = ref_payload.get("theme_dna", {})
+
+                # Reconstruct the reference film's DNA in the EXACT shape that
+                # the stored sparse vectors use; otherwise the query vector
+                # has a different distribution from the stored one and the
+                # reference film won't even rank #1 against itself.
+                ref_emo_raw = ref_payload.get("emotion_dna", {}) or {}
+                if SCHEMA_VERSION >= 2:
+                    # Stored vector is v2 split-form (emotion L1=1 + wirkung L1=1,
+                    # total L1=2). Payload emotion_dna may be joint v1-form for
+                    # films extracted before the v2 normalization — split + renorm.
+                    emo_tags_set = set(ONT.get("emotions", []))
+                    wir_tags_set = set(ONT.get("wirkung", []))
+                    emo_only = {t: w for t, w in ref_emo_raw.items() if t in emo_tags_set}
+                    wir_only = {t: w for t, w in ref_emo_raw.items() if t in wir_tags_set}
+                    ref_emo = {**normalize_l1(emo_only), **normalize_l1(wir_only)}
+                else:
+                    ref_emo = ref_emo_raw
+
+                # Theme: stored vector includes plot_themes+genres + settings +
+                # moods + pacing (+ subjects in v1). Payload theme_dna is only
+                # plot_themes+genres. Combine sub-buckets the same way reindex does.
+                ref_th_main = ref_payload.get("theme_dna", {}) or {}
+                ref_setting = ref_payload.get("setting", {}) or {}
+                ref_mood    = ref_payload.get("mood", {}) or {}
+                ref_pacing  = ref_payload.get("pacing", {}) or {}
+                ref_th = {**ref_th_main, **ref_setting, **ref_mood, **ref_pacing}
+                if SCHEMA_VERSION < 2:
+                    ref_th.update(ref_payload.get("subjects", {}) or {})
+
+                # Subjects channel (v2 only)
+                ref_subjects = ref_payload.get("subjects", {}) or {}
+
                 # Blend ratios from config/engine_params.yaml (F-012).
                 _ref_w = float(_engine_param("tone_shift", "reference_weight", default=0.6))
                 _mod_w = float(_engine_param("tone_shift", "modifier_weight", default=0.4))
@@ -923,9 +952,18 @@ def search(req: SearchRequest):
                         blended_emo[t] = blended_emo.get(t, 0) + w * _ref_w
                     for t, w in query_emo.items():
                         blended_emo[t] = blended_emo.get(t, 0) + w * _mod_w
-                    # Re-normalize to L1=1 (Audit F-015) — guards against drift
-                    # when the modifier is empty (pure "wie X" returns 0.6·ref otherwise).
-                    query_emo = normalize_l1(blended_emo) if _renorm else blended_emo
+                    if _renorm:
+                        if SCHEMA_VERSION >= 2:
+                            # Preserve v2 split-form L1=2 after re-normalize
+                            emo_tags_set = set(ONT.get("emotions", []))
+                            wir_tags_set = set(ONT.get("wirkung", []))
+                            emo_only = {t: w for t, w in blended_emo.items() if t in emo_tags_set}
+                            wir_only = {t: w for t, w in blended_emo.items() if t in wir_tags_set}
+                            query_emo = {**normalize_l1(emo_only), **normalize_l1(wir_only)}
+                        else:
+                            query_emo = normalize_l1(blended_emo)
+                    else:
+                        query_emo = blended_emo
                 if ref_th:
                     blended_th = {}
                     for t, w in ref_th.items():
@@ -933,6 +971,14 @@ def search(req: SearchRequest):
                     for t, w in query_th.items():
                         blended_th[t] = blended_th.get(t, 0) + w * _mod_w
                     query_th = normalize_l1(blended_th) if _renorm else blended_th
+                # Schema v2: also blend the subjects channel
+                if SCHEMA_VERSION >= 2 and (ref_subjects or query_subj):
+                    blended_subj = {}
+                    for t, w in ref_subjects.items():
+                        blended_subj[t] = blended_subj.get(t, 0) + w * _ref_w
+                    for t, w in query_subj.items():
+                        blended_subj[t] = blended_subj.get(t, 0) + w * _mod_w
+                    query_subj = normalize_l1(blended_subj) if _renorm else blended_subj
                 # Also use reference film's synopsis_dense as base, blend later
                 ref_dna_used = True
                 log.info(f"Resolved similar_to_title='{ref_title}' → {reference_title} (blended)")
