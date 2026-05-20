@@ -1,4 +1,7 @@
 """
+Copyright (c) 2026 Damir Dulovic. All rights reserved.
+Licensed under the MindRead Proprietary Software License (see LICENSE).
+
 Re-Indexer V3 — builds new Qdrant collection mindread_v3 from
   - movies_export.json   (metadata + overview/keywords)
   - data/movies_dna_v3.jsonl (DNA from extract_dna_v3.py)
@@ -152,26 +155,39 @@ def setup_collection(client: QdrantClient, recreate: bool):
         ("genres", PayloadSchemaType.KEYWORD),
         ("archetype", PayloadSchemaType.KEYWORD),
         ("protagonist_gender", PayloadSchemaType.KEYWORD),
+        ("protagonist_age", PayloadSchemaType.KEYWORD),
         ("tmdb_id", PayloadSchemaType.INTEGER),
         # Provider-filter (audit F-003) — keyword list payload index
         ("streaming_providers", PayloadSchemaType.KEYWORD),
     ]
     # Per-tag float index on each content_features.<tag> so the avoid_content
-    # must_not range-filter (gt=0) hits an index, not a linear scroll.  Audit F-004.
+    # must_not range-filter (gt=0) hits an index, not a linear scroll. Audit F-004.
     content_feature_tags = []
     cf_path = ONT_DIR / "content_features.json"
     if cf_path.exists():
         content_feature_tags = json.load(open(cf_path))["tags"]
     cf_indexes = [(f"content_features.{tag}", PayloadSchemaType.FLOAT)
                   for tag in content_feature_tags]
-    for field, ftype in base_indexes + cf_indexes:
+    # Same per-tag float indexes for subjects.<tag>. Needed since 2026-05 for the
+    # Bug-1 fix: when LLM extracts subjects.X ≥ 0.7, the engine adds a must-clause
+    # `payload.subjects.X > 0` (categorical lookup like "Vampirfilme" → only films
+    # with vampire subject). Without the index, that's a linear scroll over 15K+
+    # payloads per query.
+    subject_tags = []
+    subj_path = ONT_DIR / "subjects.json"
+    if subj_path.exists():
+        subject_tags = json.load(open(subj_path))["tags"]
+    subj_indexes = [(f"subjects.{tag}", PayloadSchemaType.FLOAT)
+                     for tag in subject_tags]
+    for field, ftype in base_indexes + cf_indexes + subj_indexes:
         try:
             client.create_payload_index(COLLECTION, field, field_schema=ftype)
         except Exception:
             # already exists is fine
             pass
-    print(f"Collection ready. Payload indexes: {len(base_indexes) + len(cf_indexes)} fields "
-          f"({len(cf_indexes)} content_features keys).")
+    print(f"Collection ready. Payload indexes: "
+          f"{len(base_indexes) + len(cf_indexes) + len(subj_indexes)} fields "
+          f"({len(cf_indexes)} content_features + {len(subj_indexes)} subjects).")
 
 
 def _embedder():
@@ -242,7 +258,9 @@ def upsert_films(client: QdrantClient,
             "pacing": d.get("pacing", {}),
             "subjects": d.get("subjects", {}),
             "content_features": d.get("content_features", {}),
+            "color_palette": d.get("color_palette", {}),
             "protagonist_gender": d.get("protagonist_gender"),
+            "protagonist_age": d.get("protagonist_age"),
             "emotion_dna": d.get("emotion_sparse", {}),
             "theme_dna": d.get("theme_sparse", {}),
             "indexed_at_v3": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -409,7 +427,9 @@ def main():
                 "pacing": d.get("pacing", {}),
                 "subjects": d.get("subjects", {}),
                 "content_features": d.get("content_features", {}),
+                "color_palette": d.get("color_palette", {}),
                 "protagonist_gender": d.get("protagonist_gender"),
+                "protagonist_age": d.get("protagonist_age"),
                 # Surface emotion+theme dicts on payload too (for explainability)
                 "emotion_dna": d.get("emotion_sparse", {}),
                 "theme_dna": d.get("theme_sparse", {}),

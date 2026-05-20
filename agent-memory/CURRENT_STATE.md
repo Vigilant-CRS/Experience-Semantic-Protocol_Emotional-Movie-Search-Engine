@@ -1,3 +1,28 @@
+# Current State — 2026-05-14 (Block D: Payload-Buckets erweitert)
+
+## Additive Ontologie-Erweiterung — kein Reindex
+
+**Zwei neue Payload-Buckets** (analog content_features-Muster — additiv, kein Sparse-Vektor):
+
+| Bucket | Form | Tags | Storage |
+|---|---|---|---|
+| color_palette | weighted dict (L1=1) | warm_palette, cold_palette, desaturated, monochrome_bw, neon_noir, naturalistic | payload-only |
+| protagonist_age | single string | child, teen, young_adult, adult, mature_adult, senior | payload single value + Keyword-Index |
+
+**Workflow (Pattern wiederverwendet von enrich_subjects_content):**
+1. `scripts/enrich_color_age.py` — Mini-Prompt (3.2KB / ~803 Tokens) tagged 15.255 Filme via OpenAI gpt-5.4-mini
+2. `scripts/payload_patch_color_age.py` — Qdrant `set_payload` direkt → kein Vektor-Recompute, kein Reindex
+3. extract_dna_v3 / reindex_v3 mitgezogen, sodass künftige Vollreindexe die Felder von Anfang an mitbringen
+
+**Cost-Estimate (dry-run):** ~$4.27 für 15.255 Filme, ~25 min @ 20 workers.
+
+**API-Surface:**
+- `FilmResult.protagonist_age`, `FilmResult.color_palette` (always present, defaults `None` / `{}`)
+- `IntentInfo.protagonist_age`, `IntentInfo.color_palette` (was der LLM aus der Query rauszog)
+- Hard-Filter: `protagonist_age` aus Query → `must`-Filter (z. B. „Senior-Action wie Expendables")
+
+**Why no reindex:** beide Buckets sind payload-only (analog content_features). Sparse-Vektor-Layouts (emotion_sparse=30, theme_sparse=88, subject_sparse=24) bleiben unverändert.
+
 # Current State — 2026-05-13 (Block C abgeschlossen)
 
 ## 🎉 Schema v2 live, Korpus konsolidiert

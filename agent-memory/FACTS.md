@@ -15,31 +15,32 @@ Objektive, überprüfbare Wahrheiten. Wenn etwas nicht überprüfbar ist, gehör
 - Frontend: SPA aus `frontend/index.html`, served at `/` und Static via `/static`
 - Python venv: `venv/` im Repo-Root
 
-## Korpus-Zahlen (2026-05-11)
+## Korpus-Zahlen (2026-05-13)
 
-- Qdrant points: **7,018** (alte DNA, ohne subjects/content_features)
-- JSONL-Zeilen `data/movies_dna_v3.jsonl`: **11,085**
-- Pending reindex: **4,067** (im JSONL aber nicht in Qdrant)
-- Source-Korpus: **21,418** Filme in `data/movies_top20k.json`
-- Fehlend (komplett): **~10,333** Filme
+- Qdrant points: **15,255** (Schema v2, mit subjects/content_features)
+- JSONL-Zeilen `data/movies_dna_v3.jsonl`: **15,255**
+- Source-Korpus: **21,411** Filme in `data/movies_top20k.json`
 
-## Ontologie-Größen
+## Ontologie-Größen (Schema v2 + payload-Erweiterungen 2026-05-14)
 
 | Bucket | Tags | Storage |
 |---|---|---|
-| emotions | 24 | emotion_sparse[0..23] |
-| wirkung | 6 | emotion_sparse[24..29] |
+| emotions | 24 | emotion_sparse[0..23] (L1=1) |
+| wirkung | 6 | emotion_sparse[24..29] (L1=1 separat, F-016) |
 | plot_themes | 35 | theme_sparse[0..34] |
 | genres | 18 | theme_sparse[35..52] |
 | settings | 15 | theme_sparse[53..67] |
 | moods | 12 | theme_sparse[68..79] |
 | pacing | 8 | theme_sparse[80..87] |
-| subjects | 24 | theme_sparse[88..111] |
+| subjects | 24 | subject_sparse[0..23] (eigener Channel, F-017) |
 | archetypes | 10 | payload single value |
-| content_features | 10 | payload weighted dict (NOT in any sparse vector) |
-| protagonist_gender | 4 enum | payload single value |
+| content_features | 10 | payload weighted dict + Float-Indexe pro Tag |
+| protagonist_gender | 4 enum | payload single value (Keyword-Index) |
+| color_palette | 6 | payload weighted dict (additiv, kein Sparse-Vektor) |
+| protagonist_age | 6 enum | payload single value (Keyword-Index) |
 
-**Total Sparse Dimensionen:** emotion=30, theme=112
+**Total Sparse Dimensionen:** synopsis_dense=1024, emotion_sparse=30, theme_sparse=88, subject_sparse=24
+**Additive Payload-Buckets (kein Reindex bei Erweiterung):** content_features, color_palette, protagonist_age, protagonist_gender
 
 ## API-Endpoints
 

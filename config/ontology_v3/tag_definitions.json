@@ -172,6 +172,20 @@
     "musical": "characters break into song and dance as core narrative form",
     "mockumentary": "fictional story shot in documentary style for comedic effect",
     "found_footage": "presented as recovered footage filmed by characters",
-    "anime": "Japanese animated style and storytelling tradition"
+    "anime": "Japanese animated style and storytelling tradition",
+
+    "warm_palette": "dominated by warm hues (orange, red, gold, amber); sunsets, golden hour",
+    "cold_palette": "dominated by cool hues (blue, teal, steel); winter, night, clinical",
+    "desaturated": "low saturation, muted colors, washed-out greys, gritty realism",
+    "monochrome_bw": "predominantly black-and-white or near-monochrome cinematography",
+    "neon_noir": "saturated neon lights against dark backgrounds, cyberpunk/urban-night look",
+    "naturalistic": "natural daylight, realistic colors, no stylized grading",
+
+    "child": "main protagonist is a child (roughly under 12)",
+    "teen": "main protagonist is a teenager (roughly 13-19)",
+    "young_adult": "main protagonist is a young adult (roughly 20-30)",
+    "adult": "main protagonist is an adult in mid-life (roughly 30-50)",
+    "mature_adult": "main protagonist is mature adult (roughly 50-65)",
+    "senior": "main protagonist is a senior citizen (roughly 65+)"
   }
 }

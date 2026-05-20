@@ -1,4 +1,8 @@
-# MindRead V3 — Emotional Movie Search Engine
+# Vigilant ESP — Experience Semantic Protocol
+
+*Reference implementation of the Vigilant Experience Semantic Protocol —
+the emotional movie discovery engine for streaming providers. Internal
+engine codename: **MindRead V3**.*
 
 Plug-and-Play software for streaming providers. Search films by **how they feel**, not just keywords.
 
@@ -67,6 +71,24 @@ For 50K films: batch into 250 chunks of 200; total wall-clock ~6 hours via OpenA
 | `docker-compose.yml` | api + qdrant + named volumes |
 | `docs/API_GUIDE.md` | Full integration guide |
 
+## Architecture
+
+Full diagrams + request-path sequence + measured latency numbers in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Quick overview:
+
+```
+Browser/Client → /api/search → FastAPI → LLM (intent extract)
+                                    └─→ E5 (encode query text)
+                                    └─→ Qdrant (hybrid weighted-RRF)
+                                    └─→ post-fusion: avoid, filters, palette boost
+```
+
+Measured P95 (15K-film demo corpus, single CPU node):
+- `similar_to=id` (no LLM): **153 ms**
+- topic query (1 LLM call): **3.6 s**
+- cached intent / wheel-adjust (no LLM): **286 ms**
+- tone-shift "wie X aber Y" (2 LLM calls, Variant Z): **9 s**
+
 ## Retrieval Architecture
 
 Three orthogonal vectors per film (all in Qdrant):
@@ -74,10 +96,11 @@ Three orthogonal vectors per film (all in Qdrant):
 | Vector | Dim | What it captures |
 |---|---|---|
 | `synopsis_dense` | 1024 | E5-large-v2 semantic embedding of overview text |
-| `emotion_sparse` | 30 | Plutchik 8×3 emotions + 6 viewer-impact tags (L1-normalized) |
-| `theme_sparse` | 112 | plot_themes(35) + genres(18) + settings(15) + moods(12) + pacing(8) + subjects(24) |
+| `emotion_sparse` | 30 | Plutchik 8×3 emotions + 6 viewer-impact tags (separately L1-normalized, schema v2) |
+| `theme_sparse` | 88 | plot_themes(35) + genres(18) + settings(15) + moods(12) + pacing(8) |
+| `subject_sparse` | 24 | subjects (dedicated channel with own slider weight, schema v2) |
 
-Plus payload-only fields: archetype, protagonist_gender, content_features (10 advisories), streaming_providers, etc.
+Plus payload-only fields: archetype, protagonist_gender, protagonist_age (6 buckets), color_palette (6 buckets, weighted), content_features (10 advisories), streaming_providers, etc.
 
 Fusion via **weighted Reciprocal Rank Fusion** (Cormack 2009 extension) — each channel's top-K combined with slider weights. User can dial the mix.
 
@@ -117,14 +140,28 @@ uvicorn api_v3:app --host 0.0.0.0 --port 8000
 
 ## Status
 
-- ✅ 7018 films indexed (demo corpus only — customer brings their own)
+- ✅ 15,255 films indexed (demo corpus only — customer brings their own)
+- ✅ Schema v2: emotion/wirkung separately L1-normalized + subjects as own channel
 - ✅ Plug-and-Play ingest endpoint
 - ✅ Docker bundle
 - ✅ Engine config externalized to YAML
 - ✅ Auto GPU/CPU device selection
 - ✅ Engine swappable: OpenAI / local Qwen / any OpenAI-compatible endpoint
-- 🔄 In flight: Block C — corpus consolidation + reindex with emotion/wirkung separate L1 + subjects as own channel
 
-## License & Sales
+## License
 
-Commercial software license. Contact for B2B integration: see PRODUCTIZATION_BRIEF.md.
+Vigilant ESP is **proprietary commercial software**. See [`LICENSE`](LICENSE).
+Evaluation copies are not redistributable. For commercial licensing:
+dulovic.damir@gmail.com.
+
+Third-party components (Qdrant, FastAPI, sentence-transformers, E5,
+PyTorch, Qwen, llama.cpp, OpenAI API, TMDB data, …) are used under
+their own licenses, listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+### Attribution
+
+This product uses the TMDB API but is not endorsed or certified by TMDB.
+TMDB attribution and logo are displayed in the bundled frontend per
+TMDB's API Terms of Use §6.
+
+See also [`PRODUCTIZATION_BRIEF.md`](PRODUCTIZATION_BRIEF.md) for the B2B sales context.

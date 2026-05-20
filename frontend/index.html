@@ -1,9 +1,16 @@
 <!doctype html>
+<!--
+  Vigilant ESP — Experience Semantic Protocol
+  Copyright (c) 2026 Damir Dulovic. All rights reserved.
+  Licensed under the Vigilant ESP Proprietary Software License (see LICENSE).
+  Third-party components listed in THIRD_PARTY_NOTICES.md.
+  TMDB attribution (required by TMDB API §6) is rendered in the page footer.
+-->
 <html lang="de">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MindRead V3 — Emotional Movie Search</title>
+<title>Vigilant ESP — Experience Semantic Protocol</title>
 <style>
   :root{
     --bg:#13161e; --panel:#1c2030; --panel2:#262b3d;
@@ -128,12 +135,88 @@
   .hidden{display:none}
 
   details summary{cursor:pointer;color:var(--accent2);font-size:11px}
+
+  /* TMDB attribution (required by TMDB API §6) */
+  .tmdb-attrib{margin:40px auto 18px;max-width:1200px;padding:0 16px;
+               font-size:11px;color:var(--muted);text-align:center;line-height:1.6}
+  .tmdb-attrib a{color:var(--muted);text-decoration:underline}
+  .tmdb-attrib img{height:13px;vertical-align:middle;margin-right:6px;opacity:0.7}
+
+  /* ─ Polished header / wordmark ───────────────────────────── */
+  .brand{display:flex;align-items:baseline;gap:10px;line-height:1}
+  .brand .mark{font-size:22px;font-weight:700;letter-spacing:0.5px;color:var(--text)}
+  .brand .mark .esp{color:var(--accent2)}
+  .brand .tag{font-size:11px;color:var(--muted);font-weight:400;letter-spacing:0.3px}
+  .brand .protocol{font-size:9.5px;color:var(--muted);font-weight:500;letter-spacing:2.5px;
+                   text-transform:uppercase;border-left:1px solid #3a3f4b;padding-left:10px;margin-left:2px}
+
+  /* ─ Tripartite mix-bar (Plot / Emotion / Theme) ──────────── */
+  .mix-bar{margin:8px 0 10px;height:32px;background:#1c1f2a;border:1px solid #2a2e3c;
+           border-radius:8px;overflow:hidden;display:flex;position:relative;cursor:col-resize;user-select:none}
+  .mix-bar .seg{display:flex;align-items:center;justify-content:center;font-size:11px;
+                font-weight:600;color:#fff;transition:flex-basis 80ms ease-out;min-width:32px;
+                text-shadow:0 1px 2px rgba(0,0,0,0.4)}
+  .mix-bar .seg.plot{background:linear-gradient(180deg,#4a86c4,#3a6da0)}
+  .mix-bar .seg.emo{background:linear-gradient(180deg,#c4546a,#a83e52)}
+  .mix-bar .seg.thm{background:linear-gradient(180deg,#7a9d52,#5e7d3e)}
+  .mix-bar .handle{position:absolute;top:0;bottom:0;width:6px;background:rgba(255,255,255,0.1);
+                   cursor:col-resize;transform:translateX(-3px);border-left:1px solid rgba(0,0,0,0.3);
+                   border-right:1px solid rgba(255,255,255,0.15)}
+  .mix-bar .handle:hover{background:rgba(255,255,255,0.25)}
+  .mix-legend{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);
+              text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;padding:0 2px}
+
+  /* ─ Color-palette dots + age badge on result cards ───────── */
+  .result .badges{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:3px}
+  .age-badge{font-size:10.5px;padding:2px 8px;border-radius:10px;background:#33384a;
+             color:#dde0eb;border:1px solid #3a3f4b;text-transform:lowercase;letter-spacing:0.3px}
+  .palette-dots{display:inline-flex;gap:3px;align-items:center;padding:2px 7px;
+                background:#1c1f2a;border-radius:10px;border:1px solid #2a2e3c}
+  .palette-dot{width:9px;height:9px;border-radius:50%;display:inline-block;
+               box-shadow:inset 0 0 0 1px rgba(255,255,255,0.1)}
+  .palette-dot.warm_palette{background:#e8855a}
+  .palette-dot.cold_palette{background:#5a92e8}
+  .palette-dot.desaturated{background:#9aa0aa}
+  .palette-dot.monochrome_bw{background:linear-gradient(135deg,#fff 50%,#222 50%)}
+  .palette-dot.neon_noir{background:#c93dd6}
+  .palette-dot.naturalistic{background:#7caa5a}
+
+  /* ─ Empty-state with query chips ─────────────────────────── */
+  .empty-hero{padding:50px 24px 30px;text-align:center}
+  .empty-hero h2{color:var(--text);font-weight:500;font-size:22px;margin-bottom:10px}
+  .empty-hero p{font-size:13.5px;line-height:1.6;color:var(--text2);max-width:520px;margin:0 auto 22px}
+  .query-chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:640px;margin:0 auto}
+  .query-chip{font-size:12.5px;padding:8px 14px;background:#2a3744;color:var(--accent2);
+              border:1px solid #3a4f5e;border-radius:18px;cursor:pointer;transition:all 120ms}
+  .query-chip:hover{background:var(--accent2);color:#0f1218;border-color:var(--accent2)}
+
+  /* ─ Loading skeletons ────────────────────────────────────── */
+  @keyframes shimmer { from { background-position: -200px 0 } to { background-position: 200px 0 } }
+  .skeleton{background:linear-gradient(90deg,#1c1f2a 0%,#262a39 50%,#1c1f2a 100%);
+            background-size:400px 100%;animation:shimmer 1.2s linear infinite;border-radius:6px}
+  .skel-card{display:flex;gap:14px;padding:14px;background:var(--panel);border:1px solid #2a2e3c;
+             border-radius:12px;margin-bottom:12px}
+  .skel-poster{width:120px;height:180px;flex:0 0 120px}
+  .skel-body{flex:1;display:flex;flex-direction:column;gap:8px}
+  .skel-line{height:14px}
+  .skel-line.s{width:30%}.skel-line.m{width:60%}.skel-line.l{width:90%}
+
+  /* ─ Footer / version ─────────────────────────────────────── */
+  .app-footer{margin:20px auto 40px;max-width:1200px;padding:14px 16px;
+              border-top:1px solid #2a2e3c;display:flex;justify-content:space-between;
+              align-items:center;font-size:11px;color:var(--muted);gap:12px;flex-wrap:wrap}
+  .app-footer a{color:var(--muted);text-decoration:underline}
+  .app-footer .tmdb-inline img{height:14px;vertical-align:middle;margin-right:6px;opacity:0.65}
 </style>
 </head>
 <body>
 
 <header>
-  <h1>🎬 MindRead V3</h1>
+  <div class="brand">
+    <div class="mark">Vigilant <span class="esp">ESP</span></div>
+    <div class="tag">Emotional Movie Search Engine</div>
+    <div class="protocol">Experience Semantic Protocol</div>
+  </div>
   <span class="badge" id="health-badge">connecting…</span>
   <span class="stats" id="health-stats"></span>
   <span style="flex:1"></span>
@@ -146,16 +229,16 @@
 
 <!-- Primary input -->
 <div class="search-bar">
-  <input id="freetext" type="text" placeholder='Beschreibe was du sehen willst — z.B. „Filme wie John Wick aber lustiger" oder „düstere Rachegeschichte mit Happy End"…'>
-  <button class="btn" id="btn-search">Suchen</button>
-  <button class="btn secondary" id="btn-clear">Reset</button>
+  <input id="freetext" type="text" data-i18n-placeholder="ftPlaceholder">
+  <button class="btn" id="btn-search" data-i18n="search">Suchen</button>
+  <button class="btn secondary" id="btn-clear" data-i18n="reset">Reset</button>
 </div>
 <div class="examples">
-  <span>Beispiele:</span>
-  <a class="example">Filme wie John Wick aber lustiger</a>
-  <a class="example">romantische Komödie zum Einschlafen</a>
-  <a class="example">düstere Sci-Fi mit moralischem Dilemma</a>
-  <a class="example">Filme wie Amélie</a>
+  <span data-i18n="examples">Beispiele:</span>
+  <a class="example" data-i18n="ex1">Filme wie John Wick aber lustiger</a>
+  <a class="example" data-i18n="ex2">romantische Komödie zum Einschlafen</a>
+  <a class="example" data-i18n="ex3">düstere Sci-Fi mit moralischem Dilemma</a>
+  <a class="example" data-i18n="ex4">Filme wie Amélie</a>
 </div>
 
 <div class="layout">
@@ -163,40 +246,35 @@
   <div class="sidebar">
 
     <div class="panel">
-      <h2>Mix &amp; Filter <span class="count" id="mix-info"></span></h2>
-      <div class="triangle-mix">
-        <div><div class="label">Plot</div><div class="val" id="v-syn">50%</div></div>
-        <div><div class="label">Theme</div><div class="val" id="v-th">20%</div></div>
-        <div><div class="label">Emotion</div><div class="val" id="v-emo">30%</div></div>
+      <h2><span data-i18n="mixFilter">Mix &amp; Filter</span> <span class="count" id="mix-info"></span></h2>
+      <div class="mix-legend">
+        <span data-i18n="plot">Plot</span><span data-i18n="emotion">Emotion</span><span data-i18n="theme">Theme</span>
+      </div>
+      <div class="mix-bar" id="mix-bar">
+        <div class="seg plot" id="seg-syn" style="flex-basis:35%">35</div>
+        <div class="seg emo" id="seg-emo" style="flex-basis:35%">35</div>
+        <div class="seg thm" id="seg-thm" style="flex-basis:30%">30</div>
+        <div class="handle" id="hdl-1" style="left:35%"></div>
+        <div class="handle" id="hdl-2" style="left:70%"></div>
+      </div>
+      <div style="display:none">
+        <input type="range" id="s-syn" min="0" max="100" value="35">
+        <input type="range" id="s-emo" min="0" max="100" value="35">
+        <input type="range" id="s-thm" min="0" max="100" value="30">
       </div>
       <div class="sliders">
         <div class="slider-row">
-          <label>Plot (Synopsis)</label>
-          <input type="range" id="s-syn" min="0" max="100" value="35">
-          <span class="v" id="vs-syn">35%</span>
-        </div>
-        <div class="slider-row">
-          <label>Emotion</label>
-          <input type="range" id="s-emo" min="0" max="100" value="35">
-          <span class="v" id="vs-emo">35%</span>
-        </div>
-        <div class="slider-row">
-          <label>Theme / Genre</label>
-          <input type="range" id="s-thm" min="0" max="100" value="30">
-          <span class="v" id="vs-thm">30%</span>
-        </div>
-        <div class="slider-row">
-          <label>Indie ↔ Mainstream</label>
+          <label data-i18n="indieMainstream">Indie ↔ Mainstream</label>
           <input type="range" id="s-pop" min="-100" max="100" value="0">
           <span class="v" id="vs-pop">0</span>
         </div>
         <div class="slider-row">
-          <label>Min. Runtime</label>
+          <label data-i18n="minRuntime">Min. Runtime</label>
           <input type="range" id="s-rt" min="0" max="180" value="60">
           <span class="v" id="vs-rt">60m</span>
         </div>
         <div class="slider-row">
-          <label>Jahr ab</label>
+          <label data-i18n="yearFrom">Jahr ab</label>
           <input type="range" id="s-yr" min="1920" max="2026" value="1920">
           <span class="v" id="vs-yr">∞</span>
         </div>
@@ -204,58 +282,190 @@
     </div>
 
     <div class="panel">
-      <h2>Emotionen anpassen <span class="count" id="emo-info"></span></h2>
+      <h2><span data-i18n="adjustEmotions">Emotionen anpassen</span> <span class="count" id="emo-info"></span></h2>
       <div class="legend">
-        <span class="dot suggested"></span> vom LLM erkannt &nbsp;
-        <span class="dot selected"></span> deine Auswahl &nbsp;
-        <span class="dot avoid"></span> Avoid (Shift+Klick)
+        <span class="dot suggested"></span> <span data-i18n="legendSuggested">vom LLM erkannt</span> &nbsp;
+        <span class="dot selected"></span> <span data-i18n="legendSelected">deine Auswahl</span> &nbsp;
+        <span class="dot avoid"></span> <span data-i18n="legendAvoid">Avoid (Shift+Klick)</span>
       </div>
       <div class="wheel-wrap">
         <svg class="wheel" id="wheel" viewBox="-180 -180 360 360"></svg>
       </div>
-      <h2 style="margin-top:8px">Wirkung <span class="count" id="wirk-info"></span></h2>
+      <h2 style="margin-top:8px"><span data-i18n="wirkung">Wirkung</span> <span class="count" id="wirk-info"></span></h2>
       <div class="pills" id="wirkung-pills"></div>
     </div>
 
     <div class="panel">
-      <h2>Themen / Genres <span class="count" id="theme-info"></span></h2>
+      <h2><span data-i18n="themesGenres">Themen / Genres</span> <span class="count" id="theme-info"></span></h2>
       <div class="pills" id="theme-pills" style="max-height:160px;overflow-y:auto"></div>
     </div>
 
     <div class="panel" id="adjust-panel" style="display:none">
-      <h2>Avoid <span class="count" id="avoid-info"></span></h2>
+      <h2><span data-i18n="avoid">Avoid</span> <span class="count" id="avoid-info"></span></h2>
       <div class="pills" id="avoid-pills"></div>
     </div>
 
     <div class="panel" id="providers-panel" style="display:none">
-      <h2>Streaming-Provider <span class="count" id="prov-info"></span></h2>
-      <div class="legend">Nur Filme zeigen, die auf den ausgewählten Diensten verfügbar sind (Region: DE)</div>
+      <h2><span data-i18n="streamingProviders">Streaming-Provider</span> <span class="count" id="prov-info"></span></h2>
+      <div class="legend" data-i18n="providersHelp">Nur Filme zeigen, die auf den ausgewählten Diensten verfügbar sind (Region: DE)</div>
       <div class="pills" id="provider-pills" style="max-height:140px;overflow-y:auto"></div>
     </div>
 
     <div class="panel">
-      <h2>Referenz-Film (TMDB-ID)</h2>
+      <h2 data-i18n="refFilm">Referenz-Film (TMDB-ID)</h2>
       <div style="display:flex;gap:6px">
-        <input id="ref-input" type="number" placeholder="z.B. 245891 (John Wick)"
+        <input id="ref-input" type="number" data-i18n-placeholder="refPlaceholder"
                style="flex:1;padding:8px;background:var(--panel2);border:1px solid #2a2e3c;color:var(--text);border-radius:6px;font-size:12px">
-        <button class="btn secondary" id="btn-ref" style="padding:6px 12px;font-size:11px">Suchen</button>
+        <button class="btn secondary" id="btn-ref" data-i18n="search"
+                style="padding:6px 12px;font-size:11px">Suchen</button>
       </div>
     </div>
   </div>
 
   <!-- RIGHT: Results -->
   <div class="results" id="results">
-    <div class="empty">
-      <h2>Was möchtest du sehen?</h2>
-      <p>Tippe oben einen Satz — der LLM extrahiert die passenden Emotionen + Themen<br>
-         und du siehst das Ergebnis sofort. Mit den Reglern und dem Wheel links<br>
-         kannst du <b>nachjustieren</b> ohne neuen LLM-Call.</p>
+    <div class="empty-hero" id="empty-hero">
+      <h2 data-i18n="emptyTitle">Was möchtest du sehen?</h2>
+      <p data-i18n="emptySubtitle">Tippe eine Suche in deinen eigenen Worten — Vigilant ESP extrahiert die
+         emotionale + thematische DNA und findet den passenden Film. Probiere:</p>
+      <div class="query-chips" id="query-chips">
+        <span class="query-chip" data-i18n="chip1">Mafiafilme aus den 90ern</span>
+        <span class="query-chip" data-i18n="chip2">Filme wie Amélie</span>
+        <span class="query-chip" data-i18n="chip3">Senior-Action wie Expendables</span>
+        <span class="query-chip" data-i18n="chip4">düstere Rachegeschichte mit Happy End</span>
+        <span class="query-chip" data-i18n="chip5">neon-noir cyberpunk</span>
+        <span class="query-chip" data-i18n="chip6">Filme wie John Wick aber lustiger</span>
+        <span class="query-chip" data-i18n="chip7">warme Sonnenuntergangs-Dramen</span>
+        <span class="query-chip" data-i18n="chip8">feel-good Sci-Fi</span>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
 const API = "";
+
+// ── i18n ──────────────────────────────────────────────────────────────
+// All user-visible strings. Tag labels (emotions/themes/genres/…) are
+// served separately by /api/ontology?lang=de|en. Everything below is the
+// chrome — buttons, headers, helper text, error/loading copy.
+const STRINGS = {
+  de: {
+    search: "Suchen", reset: "Reset", examples: "Beispiele:",
+    ftPlaceholder: 'Beschreibe was du sehen willst — z.B. „Filme wie John Wick aber lustiger" oder „düstere Rachegeschichte mit Happy End"…',
+    mixFilter: "Mix & Filter",
+    plot: "Plot", emotion: "Emotion", theme: "Theme",
+    indieMainstream: "Indie ↔ Mainstream",
+    minRuntime: "Min. Laufzeit",
+    yearFrom: "Jahr ab",
+    adjustEmotions: "Emotionen anpassen",
+    legendSuggested: "vom LLM erkannt",
+    legendSelected: "deine Auswahl",
+    legendAvoid: "Avoid (Shift+Klick)",
+    wirkung: "Wirkung",
+    themesGenres: "Themen / Genres",
+    avoid: "Avoid",
+    streamingProviders: "Streaming-Anbieter",
+    providersHelp: "Nur Filme zeigen, die auf den ausgewählten Diensten verfügbar sind (Region: DE)",
+    refFilm: "Referenz-Film (TMDB-ID)",
+    refPlaceholder: "z.B. 245891 (John Wick)",
+    emptyTitle: "Was möchtest du sehen?",
+    emptySubtitle: "Tippe eine Suche in deinen eigenen Worten — Vigilant ESP extrahiert die emotionale + thematische DNA und findet den passenden Film. Probiere:",
+    ex1: "Filme wie John Wick aber lustiger",
+    ex2: "romantische Komödie zum Einschlafen",
+    ex3: "düstere Sci-Fi mit moralischem Dilemma",
+    ex4: "Filme wie Amélie",
+    chip1: "Mafiafilme aus den 90ern", chip2: "Filme wie Amélie",
+    chip3: "Senior-Action wie Expendables", chip4: "düstere Rachegeschichte mit Happy End",
+    chip5: "neon-noir cyberpunk", chip6: "Filme wie John Wick aber lustiger",
+    chip7: "warme Sonnenuntergangs-Dramen", chip8: "feel-good Sci-Fi",
+    // dynamic strings (used in JS as t("key"))
+    resultsCount: "Treffer",
+    serverLabel: "Server",
+    totalLabel: "Gesamt",
+    matchLabel: "Match",
+    matchTooltip: "Match-Stärke relativ zum besten Treffer",
+    findSimilar: "Wie dieser →",
+    likeRef: "Wie:",
+    queryLbl: "Query:",
+    intentTitle: "Intent vom LLM",
+    matchPrefix: "match:",
+    ownCount: "eigene",
+    suggestedCount: "vorgeschlagen",
+    emptyError: "Tippe einen Suchsatz oder gib eine Film-ID an.",
+    loadingLLM: "🧠 LLM extrahiert Intent…",
+    loadingFast: "⚡ Aktualisiere (kein LLM-Call)…",
+    onlineLabel: "✓ online",
+    offlineLabel: "⚠ offline",
+    statsPending: "extrahiert wartend (gesamt {{total}})",
+    statsTooltip: "Indexiert in Qdrant: {{indexed}}\nExtrahiert (DNA fertig, noch nicht in Qdrant): {{total}}\nWartet auf Reindex: {{pending}}",
+    filmsIndexed: "Filme indiziert",
+  },
+  en: {
+    search: "Search", reset: "Reset", examples: "Examples:",
+    ftPlaceholder: 'Describe what you want to watch — e.g. "movies like John Wick but funnier" or "dark revenge story with happy ending"…',
+    mixFilter: "Mix & Filter",
+    plot: "Plot", emotion: "Emotion", theme: "Theme",
+    indieMainstream: "Indie ↔ Mainstream",
+    minRuntime: "Min. Runtime",
+    yearFrom: "Year from",
+    adjustEmotions: "Adjust emotions",
+    legendSuggested: "LLM-suggested",
+    legendSelected: "your selection",
+    legendAvoid: "Avoid (Shift+Click)",
+    wirkung: "Viewer Impact",
+    themesGenres: "Themes / Genres",
+    avoid: "Avoid",
+    streamingProviders: "Streaming Providers",
+    providersHelp: "Show only films available on the selected services (Region: DE)",
+    refFilm: "Reference Film (TMDB-ID)",
+    refPlaceholder: "e.g. 245891 (John Wick)",
+    emptyTitle: "What do you want to watch?",
+    emptySubtitle: "Type a search in your own words — Vigilant ESP extracts the emotional + thematic DNA and finds the matching films. Try:",
+    ex1: "Movies like John Wick but funnier",
+    ex2: "Romantic comedy to fall asleep to",
+    ex3: "Dark Sci-Fi with a moral dilemma",
+    ex4: "Movies like Amélie",
+    chip1: "Mafia films from the 90s", chip2: "Movies like Amélie",
+    chip3: "Senior-Action like Expendables", chip4: "Dark revenge story with happy ending",
+    chip5: "neon-noir cyberpunk", chip6: "Movies like John Wick but funnier",
+    chip7: "warm sunset dramas", chip8: "feel-good Sci-Fi",
+    resultsCount: "results",
+    serverLabel: "server",
+    totalLabel: "total",
+    matchLabel: "Match",
+    matchTooltip: "Match strength relative to top hit",
+    findSimilar: "Like this →",
+    likeRef: "Like:",
+    queryLbl: "Query:",
+    intentTitle: "LLM intent",
+    matchPrefix: "match:",
+    ownCount: "own",
+    suggestedCount: "suggested",
+    emptyError: "Type a search or provide a film ID.",
+    loadingLLM: "🧠 LLM extracting intent…",
+    loadingFast: "⚡ Refreshing (no LLM call)…",
+    onlineLabel: "✓ online",
+    offlineLabel: "⚠ offline",
+    statsPending: "extracted pending (total {{total}})",
+    statsTooltip: "Indexed in Qdrant: {{indexed}}\nExtracted (DNA done, not yet in Qdrant): {{total}}\nWaiting for reindex: {{pending}}",
+    filmsIndexed: "films indexed",
+  },
+};
+function t(key, vars) {
+  const lang = (window.state && window.state.lang) || "de";
+  let s = (STRINGS[lang] && STRINGS[lang][key]) || (STRINGS.de && STRINGS.de[key]) || key;
+  if (vars) for (const k in vars) s = s.replaceAll("{{" + k + "}}", vars[k]);
+  return s;
+}
+function applyI18n() {
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
+    el.setAttribute("placeholder", t(el.dataset.i18nPlaceholder));
+  });
+}
 
 const PLUTCHIK = [
   ["joy",          "var(--joy)",      ["contentment","joy","ecstasy"]],
@@ -394,9 +604,9 @@ function render(){
   const tN = Object.keys(state.userTh).length;
   const sTh = Object.keys(sugTh).length;
   document.getElementById("emo-info").textContent =
-    eN ? `${eN} eigene · ${sEmoN} vorgeschlagen` : (sEmoN ? `${sEmoN} vorgeschlagen` : "");
+    eN ? `${eN} ${t("ownCount")} · ${sEmoN} ${t("suggestedCount")}` : (sEmoN ? `${sEmoN} ${t("suggestedCount")}` : "");
   document.getElementById("theme-info").textContent =
-    tN ? `${tN} eigene · ${sTh} vorgeschlagen` : (sTh ? `${sTh} vorgeschlagen` : "");
+    tN ? `${tN} ${t("ownCount")} · ${sTh} ${t("suggestedCount")}` : (sTh ? `${sTh} ${t("suggestedCount")}` : "");
   document.getElementById("wirk-info").textContent =
     Object.keys(state.userEmo).filter(t => WIRKUNG.includes(t)).length || "";
   // Avoid panel
@@ -448,12 +658,14 @@ function setupSliders(){
     const syn=+sSyn.value, emo=+sEmo.value, thm=+sThm.value;
     const tot = syn+emo+thm || 1;
     state.weights = { synopsis: syn/tot, emotion: emo/tot, theme: thm/tot };
-    $("v-syn").textContent = Math.round(state.weights.synopsis*100)+"%";
-    $("v-emo").textContent = Math.round(state.weights.emotion*100)+"%";
-    $("v-th").textContent  = Math.round(state.weights.theme*100)+"%";
-    $("vs-syn").textContent = sSyn.value+"%";
-    $("vs-emo").textContent = sEmo.value+"%";
-    $("vs-thm").textContent = sThm.value+"%";
+    // Mix-bar segments
+    const segSyn = $("seg-syn"), segEmo = $("seg-emo"), segThm = $("seg-thm");
+    if (segSyn) { segSyn.style.flexBasis = syn + "%"; segSyn.textContent = syn; }
+    if (segEmo) { segEmo.style.flexBasis = emo + "%"; segEmo.textContent = emo; }
+    if (segThm) { segThm.style.flexBasis = thm + "%"; segThm.textContent = thm; }
+    const h1 = $("hdl-1"), h2 = $("hdl-2");
+    if (h1) h1.style.left = syn + "%";
+    if (h2) h2.style.left = (syn + emo) + "%";
     state.popularity = (+sPop.value)/100;
     $("vs-pop").textContent = sPop.value > 0 ? "+"+sPop.value : sPop.value;
     state.runtimeMin = +sRt.value; $("vs-rt").textContent = sRt.value+"m";
@@ -466,6 +678,48 @@ function setupSliders(){
     recalc();
   }));
   [sPop, sRt, sYr].forEach(s => s.addEventListener("input", recalc));
+
+  // ─ Mix-bar drag: drag handle 1 between Plot|Emotion; handle 2 between Emotion|Theme
+  const bar = $("mix-bar");
+  function setMix(syn, emo, thm) {
+    syn = Math.max(0, Math.min(100, syn));
+    thm = Math.max(0, Math.min(100, thm));
+    emo = Math.max(0, 100 - syn - thm);
+    sSyn.value = syn; sEmo.value = emo; sThm.value = thm;
+    recalc();
+  }
+  function dragHandle(which) {
+    return (e) => {
+      e.preventDefault();
+      const rect = bar.getBoundingClientRect();
+      const move = (ev) => {
+        const x = (ev.touches ? ev.touches[0].clientX : ev.clientX) - rect.left;
+        const pct = Math.max(0, Math.min(100, Math.round((x / rect.width) * 100)));
+        if (which === 1) {
+          const thm = +sThm.value;
+          setMix(pct, 100 - pct - thm, thm);
+        } else {
+          const syn = +sSyn.value;
+          setMix(syn, pct - syn, 100 - pct);
+        }
+      };
+      const up = () => {
+        document.removeEventListener("mousemove", move);
+        document.removeEventListener("mouseup", up);
+        document.removeEventListener("touchmove", move);
+        document.removeEventListener("touchend", up);
+      };
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
+      document.addEventListener("touchmove", move);
+      document.addEventListener("touchend", up);
+    };
+  }
+  $("hdl-1").addEventListener("mousedown", dragHandle(1));
+  $("hdl-1").addEventListener("touchstart", dragHandle(1));
+  $("hdl-2").addEventListener("mousedown", dragHandle(2));
+  $("hdl-2").addEventListener("touchstart", dragHandle(2));
+
   recalc();
 }
 const $ = id => document.getElementById(id);
@@ -510,14 +764,14 @@ async function doSearch(){
     body.query = text;
     willCallLLM = true;
   } else {
-    showError("Tippe einen Suchsatz oder gib eine Film-ID an.");
+    showError(t("emptyError"));
     return;
   }
 
   state.lastSimilarTo = newSimilarTo;
   state.lastQuery = text;
 
-  showLoading(willCallLLM ? "🧠 LLM extrahiert Intent…" : "⚡ Aktualisiere (kein LLM-Call)…");
+  showLoading(willCallLLM ? t("loadingLLM") : t("loadingFast"));
   const t0 = performance.now();
   try{
     const r = await fetch(`${API}/api/search`, {
@@ -537,11 +791,31 @@ async function doSearch(){
 }
 
 function showLoading(msg){
-  $("results").innerHTML = `<div class="empty"><div style="font-size:24px">⏳</div><p>${msg}</p></div>`;
+  const skel = Array.from({length: 5}, () => `
+    <div class="skel-card">
+      <div class="skeleton skel-poster"></div>
+      <div class="skel-body">
+        <div class="skeleton skel-line m"></div>
+        <div class="skeleton skel-line s"></div>
+        <div class="skeleton skel-line l"></div>
+        <div class="skeleton skel-line l"></div>
+        <div class="skeleton skel-line m"></div>
+      </div>
+    </div>`).join("");
+  $("results").innerHTML =
+    `<div style="font-size:11.5px;color:var(--muted);padding:8px 4px;letter-spacing:0.3px">${msg}</div>${skel}`;
 }
 function showError(msg){
   $("results").innerHTML = `<div class="err">⚠ ${msg}</div>`;
 }
+
+// Query-chip clicks on empty-state
+document.addEventListener("click", (e) => {
+  if (e.target.classList && e.target.classList.contains("query-chip")) {
+    $("freetext").value = e.target.textContent;
+    doSearch();
+  }
+});
 
 function renderResults(data, totalMs){
   const c = $("results"); c.innerHTML = "";
@@ -553,24 +827,24 @@ function renderResults(data, totalMs){
   // Meta line
   const meta = document.createElement("div"); meta.className = "result-meta";
   const intentBlurb = data.intent ?
-    `<details><summary>Intent vom LLM</summary>
+    `<details><summary>${t("intentTitle")}</summary>
       <div style="margin-top:6px;font-family:ui-monospace,Menlo,monospace;font-size:10.5px">
         emo: ${Object.entries(data.intent.emotion_sparse).map(([k,v])=>k+" "+(v*100).toFixed(0)+"%").join(" · ")}<br>
         thm: ${Object.entries(data.intent.theme_sparse).map(([k,v])=>k+" "+(v*100).toFixed(0)+"%").join(" · ")}<br>
         avoid: ${data.intent.avoid_emotions.join(", ")||"—"} / ${data.intent.avoid_themes.join(", ")||"—"}
       </div></details>` : "";
-  const refLine = data.reference_title ? `<span class="lbl">Wie:</span> ${data.reference_title}` :
-                  data.query ? `<span class="lbl">Query:</span> "${data.query}"` : "";
+  const refLine = data.reference_title ? `<span class="lbl">${t("likeRef")}</span> ${data.reference_title}` :
+                  data.query ? `<span class="lbl">${t("queryLbl")}</span> "${data.query}"` : "";
   meta.innerHTML = `
     <div>${refLine}</div>
     <div>
-      <span style="margin-right:12px"><b>${data.results.length}</b> Treffer</span>
-      <span style="margin-right:12px">${data.search_time_ms}ms server · ${totalMs.toFixed(0)}ms total</span>
+      <span style="margin-right:12px"><b>${data.results.length}</b> ${t("resultsCount")}</span>
+      <span style="margin-right:12px">${data.search_time_ms}ms ${t("serverLabel")} · ${totalMs.toFixed(0)}ms ${t("totalLabel")}</span>
       ${intentBlurb}
     </div>`;
   c.appendChild(meta);
 
-  $("last-search").textContent = `${data.results.length} Treffer · ${data.search_time_ms}ms`;
+  $("last-search").textContent = `${data.results.length} ${t("resultsCount")} · ${data.search_time_ms}ms`;
 
   data.results.forEach((r,i) => c.appendChild(renderResultCard(r, i)));
 }
@@ -606,11 +880,25 @@ function renderResultCard(r, idx){
     r.vote_count ? r.vote_count.toLocaleString()+" votes" : null,
   ].filter(Boolean).join(" · ");
 
+  // Age badge
+  const ageBadge = r.protagonist_age
+    ? `<span class="age-badge" title="Protagonist age">${r.protagonist_age.replace("_"," ")}</span>` : "";
+  // Color-palette dots (top 2, weighted)
+  const paletteEntries = Object.entries(r.color_palette || {})
+    .sort((a,b)=>b[1]-a[1]).slice(0,2);
+  const paletteDots = paletteEntries.length
+    ? `<span class="palette-dots" title="${paletteEntries.map(([k,v])=>k+' '+(v*100).toFixed(0)+'%').join(' · ')}">${
+        paletteEntries.map(([k]) => `<span class="palette-dot ${k}"></span>`).join("")
+      }</span>` : "";
+  const badges = (ageBadge || paletteDots)
+    ? `<div class="badges">${ageBadge}${paletteDots}</div>` : "";
+
   div.innerHTML = `
     ${poster}
     <div class="body">
       <h3><span class="rank">#${idx+1}</span>${r.title}<span class="year">(${r.year||"?"})</span></h3>
       <div class="meta-line">${meta}</div>
+      ${badges}
       <div class="overview">${r.overview||""}</div>
       <div class="why">
         ${why.length ? `<span class="why-label">match:</span>` : ""}
@@ -619,10 +907,10 @@ function renderResultCard(r, idx){
       <div class="why">${dnaTags.join("")}</div>
       <div class="footer">
         <div>
-          <span class="score-big" title="Match-Stärke relativ zum besten Treffer">${r._pct}% Match</span>
-          <span class="channels-mini" title="Roh-Score: ${r.score.toFixed(4)} | RRF-Beiträge pro Kanal">${channels}</span>
+          <span class="score-big" title="${t("matchTooltip")}">${r._pct}% ${t("matchLabel")}</span>
+          <span class="channels-mini" title="raw: ${r.score.toFixed(4)} | per-channel RRF">${channels}</span>
         </div>
-        <button class="btn-similar" data-id="${r.tmdb_id}">Wie dieser →</button>
+        <button class="btn-similar" data-id="${r.tmdb_id}">${t("findSimilar")}</button>
       </div>
     </div>`;
   div.querySelector(".btn-similar").addEventListener("click", () => {
@@ -654,21 +942,20 @@ async function checkHealth(){
     // Cache-bust so the count is always fresh on reload (some browsers cache JSON aggressively)
     const d = await (await fetch(`${API}/api/health?t=${Date.now()}`,
                                   {cache: "no-store"})).json();
-    $("health-badge").textContent = "✓ online";
+    $("health-badge").textContent = t("onlineLabel");
     const indexed = (d.points || 0).toLocaleString();
     const pending = d.pending_reindex || 0;
     const total = (d.extracted_total || 0).toLocaleString();
-    let txt = `${indexed} Filme indiziert`;
+    let txt = `${indexed} ${t("filmsIndexed")}`;
     if (pending > 0) {
-      txt += ` · ${pending.toLocaleString()} extrahiert wartend (gesamt ${total})`;
+      txt += ` · ${pending.toLocaleString()} ${t("statsPending", {total})}`;
     }
     $("health-stats").textContent = txt;
-    $("health-stats").title = `Indiziert (live searchable): ${indexed}\n` +
-      `Extrahiert (DNA fertig, noch nicht in Qdrant): ${total}\n` +
-      `Reindex bringt ${pending} weitere Filme online.`;
+    $("health-stats").title = t("statsTooltip",
+      {indexed, total, pending: pending.toLocaleString()});
     state.tenantWhitelist = (d.tenant_providers_allowed && d.tenant_providers_allowed !== "all")
       ? d.tenant_providers_allowed : null;
-  }catch(e){ $("health-badge").textContent = "⚠ offline"; }
+  }catch(e){ $("health-badge").textContent = t("offlineLabel"); }
 }
 
 async function loadProviders(){
@@ -706,6 +993,8 @@ function updateProviderInfo(){
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  window.state = state;  // expose for t() lookup
+  applyI18n();
   buildWheel();
   buildWirkungPills();
   setupSliders();
@@ -724,14 +1013,30 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("lang-select").value = state.lang;
   $("lang-select").addEventListener("change", async e => {
     state.lang = e.target.value;
+    applyI18n();              // re-translate chrome strings
     await loadOntology();    // pull new labels
     buildWheel();             // rebuild wheel with translated labels
     buildWirkungPills();
+    await checkHealth();      // refresh stats text in new lang
     render();
     if(state.hasSearched) doSearch();    // re-render results in new lang
   });
   render();
 });
 </script>
+
+<footer class="app-footer">
+  <div>
+    Vigilant ESP &nbsp;·&nbsp; Experience Semantic Protocol &nbsp;·&nbsp;
+    <span style="color:#5a6072">v3 schema·2026.05</span>
+  </div>
+  <div class="tmdb-inline">
+    <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer">
+      <img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="TMDB">
+    </a>
+    This product uses the TMDB API but is not endorsed or certified by TMDB.
+  </div>
+  <div>© 2026 Damir Dulovic &nbsp;·&nbsp; Proprietary license</div>
+</footer>
 </body>
 </html>

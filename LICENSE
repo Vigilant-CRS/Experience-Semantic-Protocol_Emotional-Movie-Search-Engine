@@ -1,0 +1,47 @@
+Vigilant ESP — Proprietary Software License
+============================================
+(Experience Semantic Protocol; internal engine codename: MindRead V3)
+
+Copyright (c) 2026 Damir Dulovic. All rights reserved.
+
+This software and the accompanying documentation, configuration files,
+ontology definitions and any pre-computed data shipped with it
+(collectively, the "Software") are the proprietary, copyrighted work of
+Damir Dulovic ("Licensor").
+
+The Software is licensed, not sold. No rights are granted under this
+file alone. Use, copying, modification, distribution, sublicensing,
+reverse engineering, decompilation or hosting of the Software as a
+service is permitted ONLY under the terms of a separately signed
+commercial license agreement between Licensor and the licensee.
+
+Without such an agreement you may NOT:
+
+  * deploy the Software in production or staging environments,
+  * make the Software available to third parties (including via SaaS,
+    PaaS or shared hosting),
+  * remove or alter any copyright, trademark or license notice,
+  * use any part of the Software, its ontology files or its API
+    specification in a derivative product.
+
+You MAY:
+
+  * read the source code for the sole purpose of evaluating a commercial
+    license (no copying beyond ordinary buffer/cache operations),
+  * run the Software locally for personal, non-commercial evaluation
+    purposes for up to 30 days.
+
+This Software bundles or depends on third-party components that are
+governed by their own licenses. Those licenses are listed in
+THIRD_PARTY_NOTICES.md and remain in full force. Nothing in this file
+limits your rights under those third-party licenses.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+For commercial licensing inquiries: dulovic.damir@gmail.com

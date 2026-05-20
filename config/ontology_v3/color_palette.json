@@ -1,0 +1,14 @@
+{
+  "_version": "v3.3.0",
+  "_description": "Color/visual palette of the film. Payload-only weighted dict — does NOT participate in any sparse vector (additive, requires no reindex). Useful for queries like 'neon-noir Filme' or 'warme Sonnenuntergangs-Dramen'.",
+  "_count": 6,
+  "_storage": "payload, weighted dict (L1=1)",
+  "tags": [
+    "warm_palette",
+    "cold_palette",
+    "desaturated",
+    "monochrome_bw",
+    "neon_noir",
+    "naturalistic"
+  ]
+}

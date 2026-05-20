@@ -1,4 +1,7 @@
 """
+Copyright (c) 2026 Damir Dulovic. All rights reserved.
+Licensed under the MindRead Proprietary Software License (see LICENSE).
+
 DNA-Extractor V3 — extracts ontology-v3 DNA per film via OpenAI Chat API.
 
 Output JSONL: one line per film with fields
@@ -58,7 +61,8 @@ def load_ontology() -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     for name in ["emotions", "wirkung", "plot_themes", "genres",
                  "settings", "archetypes", "moods", "pacing",
-                 "content_features", "subjects"]:
+                 "content_features", "subjects",
+                 "color_palette", "protagonist_age"]:
         path = ONT_DIR / f"{name}.json"
         if path.exists():
             out[name] = json.load(open(path))["tags"]
@@ -84,7 +88,8 @@ CRITICAL RULES:
 3. Use 3-7 tags per block. Don't fill all of them. Pick the most defining.
 4. archetype is a SINGLE value from the archetype list.
 5. protagonist_gender is one of: male, female, ensemble, non_binary.
-6. Return strict JSON only.
+6. protagonist_age is a SINGLE value from the protagonist_age list (best estimate from synopsis).
+7. Return strict JSON only.
 
 == EMOTIONS (Plutchik 8 families × 3 intensities, 24 tags) ==
 {fmt(ont['emotions'])}
@@ -116,6 +121,12 @@ CRITICAL RULES:
 == SUBJECTS ({len(ont['subjects'])} tags — what the film is ABOUT topically; only set when CENTRAL to the film) ==
 {fmt(ont['subjects'])}
 
+== COLOR_PALETTE ({len(ont['color_palette'])} tags — dominant visual look; pick 1-2 only when clearly inferable from genre/era/setting) ==
+{fmt(ont['color_palette'])}
+
+== PROTAGONIST_AGE ({len(ont['protagonist_age'])} tags — approximate age of main protagonist, pick ONE) ==
+{fmt(ont['protagonist_age'])}
+
 == OUTPUT SCHEMA ==
 {{
   "emotions":   {{"tag": weight, ...}},     // 3-6 entries from emotions list
@@ -129,7 +140,9 @@ CRITICAL RULES:
   "content_features": {{"tag": weight, ...}}, // 0-5 entries — only PROMINENTLY featured content
   "subjects":   {{"tag": weight, ...}},     // 0-3 entries — only CENTRAL subjects (a Mafia film
                                              // gets {{"mafia": 1.0}}; a thriller with one mob scene gets {{}})
-  "protagonist_gender": "male|female|ensemble|non_binary"
+  "color_palette": {{"tag": weight, ...}},  // 0-2 entries — only when clearly inferable
+  "protagonist_gender": "male|female|ensemble|non_binary",
+  "protagonist_age": "child|teen|young_adult|adult|mature_adult|senior"
 }}
 
 == FEW-SHOT EXAMPLE ==
@@ -212,6 +225,12 @@ CRITICAL — Reference-film detection (3 cases):
     Reference + transformation. emotions/themes/subjects you output must
     reflect ONLY the MODIFIER Y, NOT the reference film's DNA. The engine
     blends 60% reference DNA + 40% your modifier signal.
+
+    CRITICAL: similar_to_title MUST be set whenever the user names a film,
+    franchise, or iconic IP as the reference — even if the modifier is
+    vague ("realistisch", "moderner", "anders"). NEVER set it to null
+    when a film/franchise name is mentioned in the query.
+
     Examples:
       "Filme wie Amélie aber mit mehr Action" → similar_to_title="Amélie",
         emotions={{excitement: 0.5, anticipation: 0.5}}, themes={{Action: 0.7, Adventure: 0.3}}
@@ -220,18 +239,38 @@ CRITICAL — Reference-film detection (3 cases):
         emotions={{joy: 0.5, amusement: 0.5}}, themes={{Comedy: 1.0}}
       "Inception aber emotional" → similar_to_title="Inception",
         emotions={{grief: 0.4, tenderness: 0.4, melancholy: 0.2}}, themes={{}}
+      "Filme wie Star Wars aber realistisch" → similar_to_title="Star Wars",
+        emotions={{}}, themes={{}}, mood={{gritty: 0.6, dark: 0.4}}
+        (iconic franchises ALWAYS resolve — Star Wars, Marvel, Harry Potter,
+         James Bond, Star Trek, Lord of the Rings, etc.)
+      "Marvel-Style aber kein Marvel" → similar_to_title=null (modifier IS the title)
+      "Wie Pretty Woman aber moderner" → similar_to_title="Pretty Woman", ...
 
   Case D — Topic/subject/mood query (NO reference film):
     Set similar_to_title=null and fill emotions/themes/subjects normally.
     Examples: "Mafiafilme", "düstere Rachegeschichte", "feel-good Sci-Fi",
               "Action mit weiblicher Hauptrolle".
 
+    Purpose/motivation queries:
+      "Filme zum Business und Startup motivieren" → similar_to_title=null,
+        subjects={{biopic: 0.6}}, themes={{ambition: 0.4, underdog_triumph: 0.4,
+        corporate_world: 0.5}}, emotions={{inspiring: 0.5, anticipation: 0.4,
+        excitement: 0.3}}, mood={{epic: 0.3, dialogue_driven: 0.5}}
+        (films like Social Network, The Founder, Steve Jobs, Moneyball,
+         Wolf of Wall Street, Pirates of Silicon Valley)
+      "Filme zum Mut machen vor schwieren Entscheidungen" → underdog_triumph,
+        hero_journey, redemption themes; emotions={{inspiring, cathartic}}
+      "Filme zum Mitgrooven mit Musik" → subjects={{music_performance: 0.7}},
+        mood={{light, energetic}}, genres={{Music: 0.8}}
+
 Additional fields:
   "translated_query": "<English translation of the user's query>"
                       ALWAYS provide a fluent English translation. If the user wrote
                       English, copy it verbatim. This is used for semantic search.
   "avoid_emotions": [tag, ...]
-  "avoid_themes":   [tag, ...]
+  "avoid_themes":   [tag, ...]   // plot_themes / mood / pacing / genre tags to AVOID
+                                 // (e.g. "ohne Romanze" → ["forbidden_love","love_triangle"];
+                                 //  "ohne Comedy" → ["Comedy"])
   "avoid_content":  [tag, ...]   // content features to avoid: firearms, bladed_weapons,
                                  // physical_combat, explosions, supernatural_combat,
                                  // vehicular_combat, graphic_violence, torture,
@@ -243,6 +282,22 @@ Additional fields:
                                  //  - "ohne Gewalt" / "no violence" → ["graphic_violence","torture"]
                                  //  - "kindgeeignet" / "for kids" → ["graphic_violence","torture","sexual_content","drug_use"]
                                  // Use [] (empty) if no avoidance phrase. Only canonical tags.
+  "avoid_subjects": [tag, ...]   // subject categories to AVOID — only canonical subjects
+                                 // (vampire, zombie, werewolf, ghost, alien_invasion,
+                                 //  monster_creature, mafia, serial_killer, true_crime,
+                                 //  martial_arts, espionage, sports, music_performance,
+                                 //  prison_life, courtroom_legal, hospital_medical,
+                                 //  military_ops, school_university, biopic,
+                                 //  historical_event, musical, mockumentary,
+                                 //  found_footage, anime).
+                                 // Trigger phrases:
+                                 //  - "ohne Aliens" / "no aliens" → ["alien_invasion"]
+                                 //  - "ohne Zombies" → ["zombie"]
+                                 //  - "ohne Vampire" → ["vampire"]
+                                 //  - "kein Sport" → ["sports"]
+                                 //  - "kein Musical" → ["musical"]
+                                 //  - "kein Anime" → ["anime"]
+                                 // Use [] when no avoidance applies.
   "similar_to_title": null | "Film Title in ENGLISH original"  (if user says "wie X" / "like X")
                      ALWAYS use the English/original-language title, never the German one.
                      Examples: "Im Auftrag des Teufels" → "The Devil's Advocate"
@@ -254,15 +309,121 @@ Additional fields:
                         - "männlicher Held", "male lead" → "male"
                         - "Ensemble-Cast", "Gruppe" → "ensemble"
                        Otherwise null. Do NOT infer from genre alone.
+  "protagonist_age":   null | "child" | "teen" | "young_adult" | "adult" | "mature_adult" | "senior"
+                       Set when the user explicitly demands a protagonist age group:
+                        - "Kinderfilme", "kid hero", "Kind als Hauptfigur" → "child"
+                        - "Teenie-Held", "high school protagonist" → "teen"
+                        - "junger Held", "20-jähriger" → "young_adult"
+                        - "älterer Held", "Senior-Action wie Expendables", "Rentner" → "senior"
+                        - "reifer Held" → "mature_adult"
+                       Otherwise null. Do NOT infer from genre alone.
+  "color_palette":     {{"tag": weight, ...}}  (0-2 entries, only when query mentions a look)
+                       Set when the user explicitly demands a visual style:
+                        - "neon-noir", "cyberpunk look" → {{"neon_noir": 1.0}}
+                        - "warme Farben", "Sonnenuntergangs-Drama" → {{"warm_palette": 1.0}}
+                        - "kühl/blau", "cold blue look" → {{"cold_palette": 1.0}}
+                        - "Schwarz-Weiß Klassiker" → {{"monochrome_bw": 1.0}}
+                       Otherwise empty {{}}.
   "year_min": null | number   (4-digit year, inclusive)
   "year_max": null | number   (4-digit year, inclusive)
-                  Set when the user mentions an era/decade. Examples:
-                   - "80er Filme" / "1980s" → year_min=1980, year_max=1989
+                  Set ONLY when the user means the film's RELEASE year (when
+                  it was made/produced). Examples:
+                   - "80er Filme" / "1980s films" → year_min=1980, year_max=1989
                    - "90er Liebeskomödie" → year_min=1990, year_max=1999
                    - "neue Filme" / "recent" → year_min=2020 (no max)
                    - "Klassiker" / "classics" → year_max=1980 (no min)
+
+                  CRITICAL — do NOT set year_min/year_max when the user means
+                  the STORY SETTING (when the plot takes place). Those go
+                  into settings/themes instead:
+                   - "Handlung spielt in den 1920ern" / "set in the 1920s"
+                     → year_min=null, year_max=null,
+                       setting/themes: period_20th_century, mood: noir
+                   - "Mafiafilme im Chicago der 30er" → year filter null;
+                     subjects: mafia; setting: period_20th_century
+                   - "Cowboys im Wilden Westen" → year filter null;
+                     setting: frontier_period_western (or similar tag).
+                  Trigger phrases that indicate SETTING (no year filter):
+                  "spielt in", "Handlung in", "set in", "im X der Y", "im
+                  Jahr/Jahrhundert".
+                  Trigger phrases that indicate RELEASE YEAR (year filter):
+                  "Filme aus", "Filme von", "von X", "1990s films", "X-er
+                  Klassiker" (when X is the decade).
                   Otherwise null/null.
 """
+
+
+def build_anchored_query_prompt(query: str, ref_title: str, ref_year: Optional[int],
+                                 ref_dna: Dict[str, Any]) -> str:
+    """Prompt for Variant Z (LLM-with-anchor): the server has resolved the
+    reference film and is passing its CANONICAL stored DNA to the LLM. The LLM
+    sees the anchor and produces the FINAL adjusted DNA in one shot — no
+    server-side blending needed.
+
+    Used only for "wie X aber Y" queries (similar_to_title resolved AND
+    has_modifier). Pure "wie X" queries don't need this — they use the stored
+    DNA directly.
+    """
+    def _fmt(d):
+        if not d:
+            return "{}"
+        items = sorted((d or {}).items(), key=lambda kv: -kv[1])
+        return "{" + ", ".join(f'"{k}": {v:.2f}' for k, v in items) + "}"
+
+    year_str = f" ({ref_year})" if ref_year else ""
+    emo_dna = ref_dna.get("emotion_dna", {}) or {}
+    th_dna  = ref_dna.get("theme_dna", {}) or {}
+
+    return f"""The user query is a REFERENCE-PLUS-MODIFIER request:
+"{query}"
+
+The reference film {ref_title!r}{year_str} has the following canonical DNA
+(extracted from our database). Treat this as ground truth — do NOT invent
+different values for the reference:
+
+  emotions:           {_fmt(emo_dna)}
+  themes_and_genres:  {_fmt(th_dna)}
+  setting:            {_fmt(ref_dna.get('setting'))}
+  archetype:          {ref_dna.get('archetype')!r}
+  mood:               {_fmt(ref_dna.get('mood'))}
+  pacing:             {_fmt(ref_dna.get('pacing'))}
+  subjects:           {_fmt(ref_dna.get('subjects'))}
+  content_features:   {_fmt(ref_dna.get('content_features'))}
+  color_palette:      {_fmt(ref_dna.get('color_palette'))}
+  protagonist_gender: {ref_dna.get('protagonist_gender')!r}
+  protagonist_age:    {ref_dna.get('protagonist_age')!r}
+
+Now APPLY the user's modifier to this DNA and output the FINAL adjusted
+genome — every bucket filled with the adjusted values. The reader of your
+output will use the values DIRECTLY (no further server-side blending).
+
+Guidelines for common modifiers:
+  "aber lustiger"        → raise genres.Comedy substantially (≥ 0.3); raise
+                           emotions.joy + emotions.amusement; lower
+                           emotions.rage/grief; mood.light replaces dark;
+                           keep pacing.action_packed if action element remains.
+  "aber emotionaler"     → raise emotions.grief/tenderness/melancholy; lower
+                           cathartic; mood softer (atmospheric > gritty).
+  "aber düsterer"        → mood.dark stronger, raise dread/horror, deeper noir,
+                           lower joy/comforting.
+  "aber moderner"        → setting.urban_modern; raise present-day tags.
+  "aber im 80s setting"  → setting.period_20th_century if available; do NOT
+                           set year_min/year_max (those are release-year, not
+                           story-era).
+  "mit weiblicher Hauptrolle" → protagonist_gender="female"; most other DNA
+                                preserved from reference.
+  "ohne Schusswaffen"    → fill avoid_content with ["firearms"]; keep theme.
+  "länger/kürzer"        → no DNA change; the engine handles runtime filter.
+
+Output schema is the SAME as the regular DNA extraction (emotions, wirkung,
+themes, genres, setting, archetype, mood, pacing, content_features, subjects,
+color_palette, protagonist_gender, protagonist_age, plus avoid_emotions,
+avoid_themes, avoid_content, translated_query, year_min, year_max).
+
+Set similar_to_title=null in your response — the server already knows the
+reference. Set translated_query to a fluent English version of the user query.
+
+Return strict JSON only."""
 
 
 def parse_query_dna(raw: Dict[str, Any], query: str, ont: Dict[str, Any],
@@ -280,10 +441,17 @@ def parse_query_dna(raw: Dict[str, Any], query: str, ont: Dict[str, Any],
     dna["avoid_themes"] = [t for t in (raw.get("avoid_themes") or []) if isinstance(t, str)]
     dna["avoid_content"] = [t for t in (raw.get("avoid_content") or [])
                              if isinstance(t, str) and t in content_features_tags]
+    # avoid_subjects: validated against canonical subjects vocabulary
+    subj_tags = set(ont.get("subjects", []))
+    dna["avoid_subjects"] = [t for t in (raw.get("avoid_subjects") or [])
+                              if isinstance(t, str) and t in subj_tags]
     dna["similar_to_title"] = raw.get("similar_to_title")
     dna["translated_query"] = raw.get("translated_query") or query
     pg = (raw.get("protagonist_gender") or "").lower() or None
     dna["protagonist_gender"] = pg if pg in {"male", "female", "ensemble", "non_binary"} else None
+    pa = (raw.get("protagonist_age") or "").lower().strip() or None
+    age_valid = set(ont.get("protagonist_age", []))
+    dna["protagonist_age"] = pa if pa in age_valid else None
     ymin, ymax = raw.get("year_min"), raw.get("year_max")
     dna["year_min"] = int(ymin) if isinstance(ymin, (int, float)) and 1900 <= int(ymin) <= 2100 else None
     dna["year_max"] = int(ymax) if isinstance(ymax, (int, float)) and 1900 <= int(ymax) <= 2100 else None
@@ -416,6 +584,13 @@ def normalize_dna(raw: Dict[str, Any], ont: Dict[str, Any]) -> Dict[str, Any]:
     if gender not in {"male", "female", "ensemble", "non_binary"}:
         gender = None
 
+    color_palette = normalize_l1(filter_to_canonical(
+        raw.get("color_palette", {}), ont.get("color_palette", []), syns))
+
+    age_raw = (raw.get("protagonist_age") or "").lower().strip() or None
+    age_valid = set(ont.get("protagonist_age", []))
+    protagonist_age = age_raw if age_raw in age_valid else None
+
     return {
         "emotion_sparse": emotion_sparse,    # L1=1, dim=30
         "theme_sparse": theme_sparse,        # L1=1 (plot_themes+genres jointly)
@@ -426,6 +601,8 @@ def normalize_dna(raw: Dict[str, Any], ont: Dict[str, Any]) -> Dict[str, Any]:
         "subjects": subjects,                 # part of theme_sparse vector at indices 88+ (extension)
         "content_features": content_features, # payload, NOT in any sparse vector
         "protagonist_gender": gender,         # payload
+        "color_palette": color_palette,       # payload, weighted dict (L1=1), additive bucket
+        "protagonist_age": protagonist_age,   # payload, single string value
     }
 
 

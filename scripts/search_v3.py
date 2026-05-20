@@ -1,4 +1,6 @@
 """
+Copyright (c) 2026 Damir Dulovic. All rights reserved.
+Licensed under the Vigilant ESP Proprietary Software License (see LICENSE).
 Search V3 — query the mindread_v3 collection with hybrid dense+sparse fusion.
 
 Two query modes:

@@ -1,28 +1,26 @@
 """
 Copyright (c) 2026 Damir Dulovic. All rights reserved.
 Licensed under the Vigilant ESP Proprietary Software License (see LICENSE).
-Minimal-invasive enrichment: ergänze fehlende `subjects` und `content_features`
-Felder in movies_dna_v3.jsonl, ohne die existierende DNA anzutasten.
+Minimal-invasive enrichment: ergänze fehlende `color_palette` (weighted dict)
+und `protagonist_age` (single string) Felder in movies_dna_v3.jsonl, ohne
+die existierende DNA anzutasten.
 
-Hintergrund: Filme die vor der Einführung der Buckets (2026-05-06) extrahiert
-wurden haben die Felder gar nicht. Statt sie komplett neu zu extrahieren
-($28 für 21K), nutzen wir einen schmalen Mini-Prompt der NUR die zwei
-Buckets ausfragt (~$0.0003/Film mit Prompt-Caching).
+Hintergrund: Beide Buckets wurden 2026-05-14 ergänzt. Statt einen Vollextrakt
+zu fahren (~$28 / 21K Filme) nutzen wir einen schlanken Mini-Prompt der NUR
+die zwei neuen Buckets ausfragt (~$0.0003/Film mit Prompt-Caching).
 
-Filme die schon ein subjects-Feld haben (egal ob `{}` oder belegt) bleiben
-unangetastet — der LLM hat dort bereits entschieden.
+Filme die schon beide Felder haben bleiben unangetastet.
 
 Usage:
-  venv/bin/python3 scripts/enrich_subjects_content.py --dry-run         # nur zählen
-  venv/bin/python3 scripts/enrich_subjects_content.py --workers 20      # echter Run
-  venv/bin/python3 scripts/enrich_subjects_content.py --limit 50        # Test-Batch
+  venv/bin/python3 scripts/enrich_color_age.py --dry-run            # nur zählen
+  venv/bin/python3 scripts/enrich_color_age.py --limit 10           # Test-Batch
+  venv/bin/python3 scripts/enrich_color_age.py --workers 20         # echter Run
 
-Schreibt das Resultat nach movies_dna_v3.enriched.jsonl.
-Replace mit: `mv data/movies_dna_v3.enriched.jsonl data/movies_dna_v3.jsonl`
+Schreibt das Resultat nach movies_dna_v3.enriched_ca.jsonl.
+Replace mit: `mv data/movies_dna_v3.enriched_ca.jsonl data/movies_dna_v3.jsonl`
 """
 import argparse
 import json
-import os
 import sys
 import time
 import threading
@@ -40,47 +38,54 @@ from scripts.extract_dna_v3 import (
 
 
 def build_mini_system_prompt(ont: Dict[str, Any]) -> str:
-    """Mini-prompt: nur subjects + content_features Buckets."""
+    """Mini-prompt: nur color_palette + protagonist_age Buckets."""
     defs = ont["definitions"]
 
     def fmt(tags: List[str]) -> str:
         return "\n".join(f"  - {t}: {defs.get(t, '?')}" for t in tags)
 
-    return f"""You are a film-content tagger. Given a film's title, year, overview, and keywords,
-output ONLY the SUBJECTS and CONTENT_FEATURES tags that apply.
+    return f"""You are a film tagger. Given a film's title, year, overview, keywords and TMDB genres, output ONLY the COLOR_PALETTE and PROTAGONIST_AGE tags that apply.
 
 CRITICAL RULES:
 1. Use ONLY canonical tags from the two lists below. No new terms.
-2. Subjects: 0-3 entries — only when CENTRAL to the film. A Mafia film gets
-   {{"mafia": 1.0}}; a thriller with one mob scene gets {{}}.
-3. Content features: 0-5 entries — only when PROMINENTLY featured.
-4. If nothing fits a bucket, return an empty object {{}} for it.
-5. Return strict JSON only.
+2. color_palette: 0-2 entries — only when clearly inferable from genre, setting and era.
+   If unclear (most everyday dramas/comedies), return {{}} (do NOT guess naturalistic by default).
+3. protagonist_age: a SINGLE value from the list below — best estimate from synopsis.
+   If you cannot tell, return null.
+4. Return strict JSON only.
 
-== SUBJECTS ({len(ont['subjects'])} tags — what the film is ABOUT topically) ==
-{fmt(ont['subjects'])}
+== COLOR_PALETTE ({len(ont['color_palette'])} tags) ==
+{fmt(ont['color_palette'])}
 
-== CONTENT FEATURES ({len(ont['content_features'])} tags — content/violence advisories) ==
-{fmt(ont['content_features'])}
+== PROTAGONIST_AGE ({len(ont['protagonist_age'])} tags, pick ONE) ==
+{fmt(ont['protagonist_age'])}
 
 == OUTPUT SCHEMA ==
 {{
-  "subjects":         {{"tag": weight, ...}},
-  "content_features": {{"tag": weight, ...}}
+  "color_palette":   {{"tag": weight, ...}},
+  "protagonist_age": "child|teen|young_adult|adult|mature_adult|senior" | null
 }}
 
 == EXAMPLES ==
 INPUT: "John Wick" (2014) genres=["Action","Thriller"] keywords=[assassin,revenge,dog,hitman,new york]
 overview="An ex-hit-man comes out of retirement to track down the gangsters that killed his dog."
-OUTPUT: {{"subjects": {{}}, "content_features": {{"firearms": 0.55, "physical_combat": 0.30, "graphic_violence": 0.15}}}}
+OUTPUT: {{"color_palette": {{"neon_noir": 0.7, "desaturated": 0.3}}, "protagonist_age": "adult"}}
 
-INPUT: "Spectre" (2015) genres=["Action","Adventure"] keywords=[secret agent,spy,mi6,villain]
-overview="A cryptic message from Bond's past sends him on a trail to uncover a sinister organization."
-OUTPUT: {{"subjects": {{"espionage": 1.0}}, "content_features": {{"firearms": 0.5, "vehicular_combat": 0.3, "physical_combat": 0.2}}}}
+INPUT: "The Expendables" (2010) genres=["Action"] keywords=[mercenary,team,jungle]
+overview="A team of aging mercenaries are hired to overthrow a Latin American dictator."
+OUTPUT: {{"color_palette": {{"warm_palette": 0.5, "desaturated": 0.5}}, "protagonist_age": "mature_adult"}}
+
+INPUT: "Spider-Man: Homecoming" (2017) genres=["Action","Adventure","Science Fiction"] keywords=[teenager,school,super hero]
+overview="A young Peter Parker juggles his life as an ordinary high school student while becoming Spider-Man."
+OUTPUT: {{"color_palette": {{"warm_palette": 0.6, "naturalistic": 0.4}}, "protagonist_age": "teen"}}
 
 INPUT: "Amélie" (2001) genres=["Comedy","Romance"] keywords=[paris,whimsy,quirky]
 overview="A whimsical young woman in Paris decides to bring joy to the lives of those around her."
-OUTPUT: {{"subjects": {{}}, "content_features": {{}}}}
+OUTPUT: {{"color_palette": {{"warm_palette": 0.8, "naturalistic": 0.2}}, "protagonist_age": "young_adult"}}
+
+INPUT: "Schindler's List" (1993) genres=["Drama","History","War"] keywords=[holocaust,wwii]
+overview="In German-occupied Poland, industrialist Oskar Schindler becomes concerned for his Jewish workforce after witnessing their persecution by the Nazis."
+OUTPUT: {{"color_palette": {{"monochrome_bw": 1.0}}, "protagonist_age": "adult"}}
 """
 
 
@@ -107,22 +112,23 @@ def enrich_one(rec: Dict[str, Any], films_by_id: Dict[int, Dict[str, Any]],
     if not film:
         return rec, "no_metadata"
     if not film.get("overview"):
-        # Set empty fields so we don't try again next run
-        rec["dna_v3"].setdefault("subjects", {})
-        rec["dna_v3"].setdefault("content_features", {})
+        rec["dna_v3"].setdefault("color_palette", {})
+        rec["dna_v3"].setdefault("protagonist_age", None)
         return rec, "no_overview"
 
     user = build_mini_user_prompt(film)
     raw = call_openai(system, user)
 
     syns = ont["synonyms"]
-    subj_filtered = filter_to_canonical(raw.get("subjects") or {},
-                                         ont["subjects"], syns)
-    cf_filtered = filter_to_canonical(raw.get("content_features") or {},
-                                       ont["content_features"], syns)
+    cp_filtered = filter_to_canonical(raw.get("color_palette") or {},
+                                       ont["color_palette"], syns)
+    rec["dna_v3"]["color_palette"] = normalize_l1(cp_filtered)
 
-    rec["dna_v3"]["subjects"] = normalize_l1(subj_filtered)
-    rec["dna_v3"]["content_features"] = normalize_l1(cf_filtered)
+    age_raw = (raw.get("protagonist_age") or "")
+    age_raw = age_raw.lower().strip() if isinstance(age_raw, str) else ""
+    age_valid = set(ont["protagonist_age"])
+    rec["dna_v3"]["protagonist_age"] = age_raw if age_raw in age_valid else None
+
     return rec, "ok"
 
 
@@ -131,7 +137,7 @@ def main():
     ap.add_argument("--jsonl", default=str(ROOT / "data" / "movies_dna_v3.jsonl"))
     ap.add_argument("--source", default=str(ROOT / "data" / "movies_top20k.json"))
     ap.add_argument("--out", default=None,
-                    help="Output JSONL (default: <jsonl>.enriched.jsonl)")
+                    help="Output JSONL (default: <jsonl>.enriched_ca.jsonl)")
     ap.add_argument("--workers", type=int, default=20)
     ap.add_argument("--limit", type=int, default=None,
                     help="Process at most N candidates (testing)")
@@ -145,14 +151,12 @@ def main():
     print(f"Mini-prompt size: {len(system)} chars (~{len(system)//4} tokens)")
     print(f"OpenAI model: {OPENAI_MODEL}")
 
-    # Load film metadata for overview/keywords lookup
     films = json.load(open(args.source))
     films_by_id = {m["tmdb_id"]: m for m in films}
     print(f"Loaded {len(films_by_id)} film metadata records")
 
-    # Read JSONL; identify candidates (missing subjects OR content_features key)
     in_path = Path(args.jsonl)
-    out_path = Path(args.out) if args.out else in_path.with_suffix(".enriched.jsonl")
+    out_path = Path(args.out) if args.out else in_path.with_suffix(".enriched_ca.jsonl")
 
     all_records: List[Optional[Dict[str, Any]]] = []
     todo_idx: List[int] = []
@@ -162,20 +166,19 @@ def main():
                 rec = json.loads(line)
                 all_records.append(rec)
                 dna = rec.get("dna_v3", {})
-                if ("subjects" not in dna) or ("content_features" not in dna):
+                if ("color_palette" not in dna) or ("protagonist_age" not in dna):
                     todo_idx.append(i)
             except Exception:
                 all_records.append(None)
 
     print(f"JSONL lines: {len(all_records)}")
-    print(f"Candidates (missing subjects or content_features key): {len(todo_idx)}")
+    print(f"Candidates (missing color_palette or protagonist_age key): {len(todo_idx)}")
 
     if args.limit:
         todo_idx = todo_idx[:args.limit]
         print(f"Limited to first {len(todo_idx)}")
 
     if args.dry_run:
-        # Show distribution of candidates by vote_count
         votes_buckets = {">3000": 0, ">500": 0, ">100": 0, "<=100": 0, "no_meta": 0}
         for idx in todo_idx:
             rec = all_records[idx]
@@ -192,7 +195,6 @@ def main():
         print("Candidate vote_count distribution:")
         for k, v in votes_buckets.items():
             print(f"  {k}: {v}")
-        # Cost estimate
         cost = len(todo_idx) * 0.00028
         print(f"\nEstimated cost: ~${cost:.2f}")
         print(f"Estimated time @ 20 workers, 2s/call: ~{len(todo_idx)*2/20/60:.0f} min")
@@ -238,7 +240,6 @@ def main():
                 print(f"  [{written+errors}/{len(todo_idx)}] ok={written} err={errors} "
                       f"rate={rate:.1f}/s eta={eta:.0f}s", flush=True)
 
-    # Write enriched JSONL
     with open(out_path, "w") as f:
         for rec in all_records:
             if rec is not None:

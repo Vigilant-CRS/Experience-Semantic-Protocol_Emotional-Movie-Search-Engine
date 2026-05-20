@@ -1,4 +1,6 @@
 """
+Copyright (c) 2026 Damir Dulovic. All rights reserved.
+Licensed under the Vigilant ESP Proprietary Software License (see LICENSE).
 LLM provider abstraction — one interface, multiple backends.
 
 Customer chooses via env (LLM_PROVIDER + provider-specific config):

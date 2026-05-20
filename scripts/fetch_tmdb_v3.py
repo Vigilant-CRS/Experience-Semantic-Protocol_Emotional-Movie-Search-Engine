@@ -1,4 +1,6 @@
 """
+Copyright (c) 2026 Damir Dulovic. All rights reserved.
+Licensed under the Vigilant ESP Proprietary Software License (see LICENSE).
 Fetch top-N films from TMDB by popularity and save to data/movies_tmdb_v3.json.
 
 Output schema is the same as movies_export.json so extract_dna_v3.py can pick it up.

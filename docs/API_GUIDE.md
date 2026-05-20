@@ -1,4 +1,7 @@
-# MindRead V3 — API Integration Guide
+# Vigilant ESP — API Integration Guide
+
+*Experience Semantic Protocol. Engine codename: MindRead V3.
+Proprietary commercial software — see [`LICENSE`](../LICENSE).*
 
 REST-API für Streaming-Anbieter. Stand 2026-05-12.
 
@@ -129,6 +132,8 @@ curl -X POST http://localhost:8000/api/admin/films \
     "avoid_content": [],
     "similar_to_title": "John Wick",
     "protagonist_gender": null,
+    "protagonist_age": null,
+    "color_palette": {},
     "year_min": null,
     "year_max": null
   },
@@ -144,6 +149,8 @@ curl -X POST http://localhost:8000/api/admin/films \
       "genres": ["Action", "Thriller"],
       "archetype": "antihero",
       "protagonist_gender": "male",
+      "protagonist_age": "adult",
+      "color_palette": {"neon_noir": 0.7, "desaturated": 0.3},
       "runtime": 101,
       "vote_count": 14829,
       "vote_average": 7.4,
@@ -192,6 +199,12 @@ requests.post(URL, json={"query": "Action für Kinder",
                           "avoid_content": ["graphic_violence","torture","sexual_content","drug_use"]})
 ```
 
+#### D2. Protagonist-Alter (Hard-Filter aus Query)
+Wenn die Query eine Altersgruppe nennt (z. B. „Senior-Action wie Expendables"), zieht der LLM `protagonist_age` raus und der Server setzt einen Qdrant `must`-Filter auf `payload.protagonist_age`. 6 Werte: `child, teen, young_adult, adult, mature_adult, senior`.
+
+#### D3. Color-Palette (Soft-Signal)
+Wenn die Query einen Look-Wunsch enthält (z. B. „neon-noir Filme", „warme Sonnenuntergangs-Dramen"), liefert der LLM `color_palette` als gewichtetes Dict. Aktuell nur als Surface auf `IntentInfo`/`FilmResult` exponiert — keine Filter-Wirkung, kann clientseitig für Re-Ranking genutzt werden. 6 Tags: `warm_palette, cold_palette, desaturated, monochrome_bw, neon_noir, naturalistic`.
+
 #### E. Wheel-Adjust ohne LLM (~50ms statt 2-3s)
 Nach erster Suche kennt der Client `intent.emotion_sparse` und `intent.theme_sparse`. Slider/Wheel-Anpassung sendet diese direkt:
 ```python
@@ -216,6 +229,27 @@ requests.post(URL, json={"query": "...", "external_score_boost": {245891: 0.95, 
 ## Admin-Endpoints
 
 Diese Endpoints sind **nicht für End-User**. Vom Käufer-Backend aufgerufen (z.B. nightly catalog sync). Wenn die Engine direkt im Internet exponiert wird, sollte der Käufer sie per Reverse-Proxy / API-Gateway abriegeln.
+
+### Authentication
+
+Alle `/api/admin/*` Endpoints sind durch einen **X-API-Key**-Header geschützt. Konfiguration via Env-Variable:
+
+```env
+ADMIN_API_KEYS=key-customer-A,key-customer-B,key-ops-tool
+```
+
+- Komma-separierte Liste — beliebig viele Keys
+- Wenn die Variable **leer** ist, sind die Endpoints offen (nur für Dev). Der Server loggt beim Start eine Warnung
+- Auth-Failure → `401 Unauthorized`
+- Rotate-Strategie: füge neuen Key hinzu, lass den alten 24 h parallel laufen, entferne ihn dann
+
+Anfrage:
+```bash
+curl -X POST https://host/api/admin/films \
+     -H 'X-API-Key: key-customer-A' \
+     -H 'content-type: application/json' \
+     -d @batch.json
+```
 
 ### `POST /api/admin/films` — Plug-and-Play Ingest
 
@@ -287,6 +321,29 @@ Speed-Erwartung pro Film:
 - Lokales Qwen 4B auf Quadro P620: **50-80 s/Film** (zu langsam für Synchron-Ingest, eher Batch-CLI nutzen)
 - Lokales Qwen 4B auf RTX 4090: **3-8 s/Film** (synchron praktikabel)
 
+### `POST /api/admin/films/csv` — CSV-Variante
+
+Für Käufer mit flachen Catalog-Exports (Excel-Export, Google-Sheet-Download). Identische Semantik zum JSON-Endpoint, aber als `multipart/form-data` mit CSV-Datei.
+
+```bash
+curl -X POST https://host/api/admin/films/csv \
+     -H 'X-API-Key: key-customer-A' \
+     -F 'file=@catalog.csv' \
+     -F 'do_index=true' \
+     -F 'skip_existing=true'
+```
+
+**CSV-Format:**
+
+```csv
+tmdb_id,title,overview,year,release_date,runtime,genres,keywords,director,cast,vote_count,vote_average,popularity,poster_path,streaming_providers,title_de,overview_de
+12345,"Film Title","Plot synopsis...",2024,2024-03-15,110,Action|Thriller,assassin|revenge,Director Name,Actor 1|Actor 2,5000,7.4,35.6,/abc.jpg,Netflix,Deutscher Titel,Deutsche Synopsis
+```
+
+Mehrwert-Spalten (`genres`, `keywords`, `cast`, `streaming_providers`) sind **pipe-separated** — Komma wäre mehrdeutig zum CSV-Delimiter. UTF-8 mit optionalem BOM. Erste Zeile = Header. Pflichtspalten: `tmdb_id` (oder `id`), `title`, `overview`. Alle anderen optional. Form-Parameter wie der JSON-Endpoint (`do_index`, `skip_existing`, `use_local_llm`).
+
+Response = identisches `IngestResponse`-Schema. Parse-Fehler einzelner Zeilen erscheinen in `errors[]` mit `row`-Nummer.
+
 ### `POST /api/admin/refresh-title-index`
 
 Baut den In-Memory-Title-Cache (für „wie X"-Auflösung) neu aus Qdrant. Nach größeren Ingests aufrufen.
@@ -305,14 +362,15 @@ Baut den In-Memory-Title-Cache (für „wie X"-Auflösung) neu aus Qdrant. Nach 
 {
   "status": "healthy",
   "collection": "mindread_v3",
-  "points": 7018,
-  "indexed_vectors": 14028,
-  "extracted_total": 14984,           // films in JSONL (incl. not-yet-indexed)
-  "pending_reindex": 7966,             // extracted but not in Qdrant
+  "points": 15255,
+  "indexed_vectors": 45765,
+  "extracted_total": 15255,           // films in JSONL (incl. not-yet-indexed)
+  "pending_reindex": 0,                // extracted but not in Qdrant
   "ontology_buckets": {
     "emotions": 24, "wirkung": 6, "plot_themes": 35, "genres": 18,
     "settings": 15, "archetypes": 10, "moods": 12, "pacing": 8,
-    "subjects": 24, "content_features": 10
+    "subjects": 24, "content_features": 10,
+    "color_palette": 6, "protagonist_age": 6
   },
   "llm": "gpt-5-mini",
   "tenant_providers_allowed": "all"

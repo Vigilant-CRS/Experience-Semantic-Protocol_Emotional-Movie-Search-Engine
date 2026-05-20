@@ -172,6 +172,20 @@
     "musical": "Musical",
     "mockumentary": "Mockumentary",
     "found_footage": "Found Footage",
-    "anime": "Anime"
+    "anime": "Anime",
+
+    "warm_palette": "warme Farbpalette",
+    "cold_palette": "kalte Farbpalette",
+    "desaturated": "entsättigt",
+    "monochrome_bw": "Schwarz-Weiß",
+    "neon_noir": "Neon-Noir",
+    "naturalistic": "naturalistisch",
+
+    "child": "Kind",
+    "teen": "Teenager",
+    "young_adult": "junger Erwachsener",
+    "adult": "Erwachsener",
+    "mature_adult": "reifer Erwachsener",
+    "senior": "Senior"
   }
 }

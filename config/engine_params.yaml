@@ -44,6 +44,12 @@ avoid:
   soft_score_magnitude: 0.02   # absolute score unit (≈ RRF top-rank magnitude)
   strict_threshold: 0.10       # drop films with avoided-mass > this (avoid_strict=True)
 
+scoring:
+  # Soft re-rank multiplier on RRF score. Additive bucket (no reindex, no sparse channel).
+  # Multiplies score by (1 + boost * <q_cp, film_cp>); typical overlap ~0.3 → ~2.4% bump.
+  # Raise if visually-tagged queries should dominate; lower if it overrides theme/emotion.
+  color_palette_boost: 0.08
+
 tone_shift:
   # "Filme wie X aber Y" blending: query_dna = ref_weight * ref + modifier_weight * mod.
   # Result is L1-renormalized (F-015 fix).

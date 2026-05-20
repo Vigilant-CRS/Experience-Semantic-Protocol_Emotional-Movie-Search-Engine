@@ -164,6 +164,20 @@
     "graphic_violence": ["gore", "splatter", "graphic_blood", "extreme_violence", "blutig"],
     "torture": ["folter", "torture_porn", "extreme_interrogation"],
     "sexual_content": ["sex_scenes", "explicit_sex", "erotik", "sexszenen"],
-    "drug_use": ["drugs", "narcotics", "drogen", "drug_themes"]
+    "drug_use": ["drugs", "narcotics", "drogen", "drug_themes"],
+
+    "warm_palette": ["warme_farben", "golden_hour", "amber_tones", "sunset_colors", "orange_palette"],
+    "cold_palette": ["kalte_farben", "blue_palette", "teal_palette", "icy_tones", "steel_blue"],
+    "desaturated": ["entsaettigt", "muted_colors", "washed_out", "gritty_realism", "grau_in_grau"],
+    "monochrome_bw": ["bw", "black_and_white", "schwarzweiss", "monochrom"],
+    "neon_noir": ["cyberpunk_look", "neon_lights", "urban_night", "synthwave_visuals"],
+    "naturalistic": ["realistic_color", "natural_light", "daylight_realism", "natuerliche_farben"],
+
+    "child": ["kind", "kid_protagonist", "children_protagonist", "kinder"],
+    "teen": ["teenager", "youth_protagonist", "high_school_age", "jugendlich"],
+    "young_adult": ["20s", "early_30s", "young_adult_protagonist", "junger_erwachsener"],
+    "adult": ["middle_aged_protagonist", "midlife", "erwachsener"],
+    "mature_adult": ["older_adult", "50s_60s_protagonist", "older_protagonist"],
+    "senior": ["elderly_protagonist", "retiree", "senior_protagonist", "rentner"]
   }
 }

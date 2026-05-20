@@ -1,4 +1,6 @@
 """
+Copyright (c) 2026 Damir Dulovic. All rights reserved.
+Licensed under the Vigilant ESP Proprietary Software License (see LICENSE).
 Enrich Qdrant V3 payload with TMDB poster, vote_count, popularity, release_date.
 
 Reads tmdb_ids from the mindread_v3 collection, fetches details from TMDB API,

@@ -1,4 +1,7 @@
-# MindRead — User Guide
+# Vigilant ESP — User Guide
+
+*Experience Semantic Protocol. Engine codename: MindRead V3.
+Proprietary commercial software — see [`LICENSE`](../LICENSE).*
 
 **Was es kann:** Filme finden anhand dessen *was du fühlen willst*, nicht nur Genre/Schauspieler.
 

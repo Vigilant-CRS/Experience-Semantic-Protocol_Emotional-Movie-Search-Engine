@@ -41,3 +41,4 @@ archive/
 
 # Analytics dumps
 analytics_data/
+.claude/

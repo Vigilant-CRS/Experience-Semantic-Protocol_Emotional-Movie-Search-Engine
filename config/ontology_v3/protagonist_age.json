@@ -1,0 +1,14 @@
+{
+  "_version": "v3.3.0",
+  "_description": "Approximate age group of the main protagonist(s). Payload-only single-value (like protagonist_gender) — does NOT participate in any sparse vector (additive, requires no reindex). Useful for queries like 'Senior-Action wie Expendables' vs 'jugendlicher Held wie Spider-Man'.",
+  "_count": 6,
+  "_storage": "payload, single string value (one of tags or null)",
+  "tags": [
+    "child",
+    "teen",
+    "young_adult",
+    "adult",
+    "mature_adult",
+    "senior"
+  ]
+}

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Vigilant ESP
+Comment=Experience Semantic Protocol — Emotional Movie Search
+Exec=bash -c 'cd "$(dirname %k)" && ./start.sh; bash'
+Icon=video-x-generic
+Terminal=true
+Categories=AudioVideo;Video;

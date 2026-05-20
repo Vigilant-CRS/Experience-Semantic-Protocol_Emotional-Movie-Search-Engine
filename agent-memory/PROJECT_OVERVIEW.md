@@ -1,8 +1,13 @@
 # Project Overview
 
-## Was MindRead ist
+*Produkt-Name außen: **Vigilant ESP** (Experience Semantic Protocol).
+Engine-Codename intern: **MindRead V3** — dieser Name bleibt in Python-Modulen, Qdrant-Collection, Env-Variablen und internen Docs.*
+
+## Was Vigilant ESP / MindRead ist
 
 Semantische Filmsuchmaschine, die nicht über Genres sucht, sondern über **emotionale + thematische DNA**. Statt „Action-Film" tippt der Nutzer „düstere Rachegeschichte mit Happy End" oder „Filme wie John Wick aber mit weiblicher Hauptrolle aber ohne Schusswaffen".
+
+Das Theorie-Paper "Vigilant Experience Semantic Protocol" liefert die wissenschaftliche Untermauerung; diese Software ist die Reference-Implementation.
 
 ## Was es nicht ist
 
@@ -33,9 +38,8 @@ Drei differentiatoren gegenüber Standard-Filmsuche:
 
 DACH-Streaming-Anbieter mit eigenem Katalog (3K-50K Filme), die ein USP-Feature für Onboarding/Discovery suchen und **kein** weiteres ML-Team aufbauen wollen.
 
-## Aktuelles Korpus (Demo)
+## Aktuelles Korpus (Demo, Stand 2026-05-13)
 
-- 7,018 Filme indiziert in Qdrant (alte DNA, ohne subjects/content_features)
-- 11,085 Filme extrahiert in JSONL (~4K davon via Qwen mit neuer Ontologie)
-- 21,418 Filme als Zielkorpus aus TMDB top-popularity vorbereitet
-- ~10K Filme fehlen noch komplett im JSONL
+- 15,255 Filme indiziert in Qdrant (Schema v2, vollständige Ontologie inkl. subjects/content_features)
+- 21,411 Filme als Zielkorpus aus TMDB top-popularity vorbereitet
+- Payload-Buckets `color_palette` + `protagonist_age` 2026-05-14 ergänzt — additiv, kein Reindex nötig (`scripts/payload_patch_color_age.py`)
