@@ -3,7 +3,7 @@
 <desc id="desc">Natural-language experiential intent is mapped to typed semantic and vector state, matched against film experience DNA, and returned as explainable ranked results.</desc>
 <rect width="1200" height="470" rx="28" fill="#0d1117"/>
 <text x="60" y="70" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="31" font-weight="700" fill="#f0f6fc">First ESP reference implementation: Experience Retrieval</text>
-<text x="60" y="106" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" fill="#8b949e">A practical L1 path: encode what a person wants to experience, then retrieve content by that state.</text>
+<text x="60" y="106" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" fill="#8b949e">Media discovery: represent experience preferences, then retrieve content by that state.</text>
 <g font-family="Inter,Segoe UI,Arial,sans-serif">
  <rect x="60" y="160" width="250" height="180" rx="22" fill="#161b22" stroke="#30363d" stroke-width="2"/>
  <text x="185" y="202" text-anchor="middle" font-size="18" font-weight="700" fill="#f0f6fc">Human intent</text>

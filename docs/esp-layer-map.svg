@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
 <title id="title">Experience Semantic Protocol typed semantic spaces</title>
-<desc id="desc">ESP represents experience as typed semantic spaces for knowledge, intention, emotion, context, sensory and temporal information.</desc>
+<desc id="desc">ESP proposes representing experience as typed semantic spaces for knowledge, intention, emotion, context, sensory and temporal information.</desc>
 <rect width="1200" height="420" rx="28" fill="#0d1117"/>
 <text x="60" y="72" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="32" font-weight="700" fill="#f0f6fc">Experience Semantic Protocol</text>
-<text x="60" y="108" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" fill="#8b949e">Meaning as typed semantic state — language becomes an interface, not the only carrier.</text>
+<text x="60" y="108" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" fill="#8b949e">The research vision: typed representations of knowledge, intent, affect and context.</text>
 <g font-family="Inter,Segoe UI,Arial,sans-serif">
   <rect x="60" y="150" width="160" height="110" rx="18" fill="#161b22" stroke="#58a6ff" stroke-width="2"/>
   <text x="140" y="192" text-anchor="middle" font-size="24" font-weight="700" fill="#58a6ff">KNO</text>

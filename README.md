@@ -1,8 +1,12 @@
-# Vigilant ESP — Experience Semantic Protocol
+<p align="center">
+  <img src="docs/esp-hero.svg" alt="Vigilant ESP by Vigilant e.K. — From human intent to experience discovery. The first media-search implementation in the Experience Semantic Protocol research program." width="100%">
+</p>
+
+# Vigilant ESP — Emotional Movie Search Engine
 
 <p align="center">
   <strong>Search by experience, not just by words.</strong><br/>
-  The first practical reference implementation of the <strong>Experience Semantic Protocol (ESP)</strong> research program.
+  Vigilant e.K.’s first practical reference implementation in the <strong>Experience Semantic Protocol (ESP)</strong> research program.
 </p>
 
 <p align="center">
@@ -13,12 +17,21 @@
 </p>
 
 <p align="center">
+  <a href="https://doi.org/10.5281/zenodo.20024213"><strong>Read the ESP paper ↗</strong></a> &nbsp;·&nbsp;
+  <a href="#what-this-repository-implements-today">Explore the engine</a> &nbsp;·&nbsp;
+  <a href="#quick-start">Run an evaluation</a> &nbsp;·&nbsp;
+  <a href="mailto:info@vigilant-crs.de">Commercial licensing</a>
+</p>
+
+**Find the experience you want.** Translate natural language, an emotion wheel and explicit preferences into ranked films with visible match reasons. Built for streaming providers and catalogue owners who want more control over discovery.
+
+<p align="center">
   <img src="docs/esp-layer-map.svg" alt="ESP typed semantic spaces" width="100%">
 </p>
 
 ## From the ESP paper to a running system
 
-The research paper **[The Experience Semantic Protocol — A North Star for Post-Linguistic Communication](https://doi.org/10.5281/zenodo.20024213)** asks a simple question:
+The research paper **[The Experience Semantic Protocol — A North Star for Post-Linguistic Communication](https://doi.org/10.5281/zenodo.20024213)** motivates our starting question:
 
 > What if machines did not always have to reduce human meaning to a sentence before they could work with it?
 
@@ -26,7 +39,7 @@ ESP treats parts of experience as **typed, machine-readable semantic states**. I
 
 The long-term objective is not “mind reading” and not the claim that subjective experience has already been solved. The objective is a **testable protocol direction** in which meaning can be represented, selectively shared, matched, transformed and rendered into language only when language is useful.
 
-**Vigilant ESP is the first concrete implementation of that idea inside the ESP program.** It starts with a tractable L1 use case: media discovery.
+**Vigilant ESP is our first concrete application of that idea inside the ESP program.** It explores media discovery, a use case in the paper’s L1 research direction. It is an application of the typed-representation approach; full L1 protocol conformance has not been established.
 
 <p align="center">
   <img src="docs/esp-reference-implementation.svg" alt="Vigilant ESP reference implementation flow" width="100%">
@@ -61,13 +74,15 @@ Traditional search tends to force that intent through title matches, genres and 
 | app-specific semantics | interoperable semantic state is the research goal |
 | result only | result + match reasons |
 
-The immediate benefit is better **experience retrieval**. The broader research value is a common semantic layer that could eventually connect media systems, assistants, learning tools, agent systems and — only when the science and safety are mature enough — consent-bound neural interfaces.
+The immediate benefit is **controllable experience retrieval**: users can inspect extracted intent, adjust channel weights and express what to avoid. The broader research value is a common semantic layer that could eventually connect media systems, assistants, learning tools, agent systems and — only when the science and safety are mature enough — consent-bound neural interfaces.
 
 ---
 
 ## What this repository implements today
 
-This repository implements a **media-search subset of ESP**, not the entire protocol described in the paper.
+This repository implements the **media-search application of ESP’s typed-semantic approach**. The six research types are a conceptual framework; the engine uses the four retrieval channels documented below.
+
+The paper’s wire format, encrypted transport, cryptographic consent capabilities, learned six-type encoder/decoder and ExperienceBench validation are **outside this implementation**. Matching explanations describe shared tags and channel contributions; they do not demonstrate subjective experience transfer.
 
 The current engine exercises **INT / EMO / CTX most directly**, with additional structured content features that approximate parts of sensory and temporal experience. It combines:
 
@@ -135,10 +150,10 @@ Vigilant ESP is designed as a **search and experience-intent layer** that can si
 
 It does **not** require a streaming provider to replace its current metadata stack. A provider can bring its own editorial tags, embeddings or third-party content intelligence and map those signals into the canonical Vigilant ESP representation.
 
-That makes the system useful in two modes:
+Two integration paths follow from this design:
 
-1. **Self-contained reference mode** — extract film DNA from ordinary catalogue metadata.
-2. **Bring-your-own-DNA mode** — use the customer's richer existing metadata as input and let Vigilant ESP handle intent translation, fusion, ranking and explanation.
+1. **Available today: metadata ingestion** — submit film metadata through the JSON or CSV ingest API; the engine extracts film DNA and indexes it.
+2. **Custom integration: existing content intelligence** — map editorial tags or other content signals into the canonical schema. This requires an adapter; the standard ingest API does not accept arbitrary external embeddings or precomputed DNA.
 
 The architectural goal is to make the **front door of discovery** understand experiential intent.
 
@@ -146,9 +161,14 @@ The architectural goal is to make the **front door of discovery** understand exp
 
 ## Quick start
 
+For evaluation under [LICENSE](LICENSE), start with an authorized checkout:
+
 ```bash
+git clone git@github.com:Vigilant-CRS/Experience-Semantic-Protocol_Emotional-Movie-Search-Engine.git
+cd Experience-Semantic-Protocol_Emotional-Movie-Search-Engine
 cp .env.example .env
 # set OPENAI_API_KEY, or configure a supported local/OpenAI-compatible backend
+# set ADMIN_API_KEYS for catalogue ingestion
 
 docker compose up -d
 docker compose logs -f api
@@ -159,6 +179,8 @@ Then open:
 - **http://localhost:8000** — reference frontend
 - **http://localhost:8000/api/docs** — interactive API documentation
 - **http://localhost:8000/api/health** — health endpoint
+
+A fresh checkout starts with an empty catalogue. Ingest your own licensed film metadata using the [JSON or CSV guide](docs/API_GUIDE.md), with your configured `X-API-Key`, before searching. Film data, model weights and Qdrant snapshots are not bundled in Git.
 
 ### Example API query
 
@@ -179,7 +201,7 @@ For catalogue ingestion and production integration, see **[docs/API_GUIDE.md](do
 
 The repository snapshot includes:
 
-- a demo corpus with **15,255 indexed films**;
+- ingestion and retrieval code for customer-supplied catalogues;
 - schema-v2 separation of emotion/viewer-impact and subjects;
 - plug-and-play catalogue ingestion;
 - externalized engine parameters;
@@ -187,13 +209,13 @@ The repository snapshot includes:
 - hosted or local language-model paths;
 - evaluation scripts for predictable, free-text and tone-shift queries.
 
-Performance depends heavily on the selected language-model backend. Retrieval itself is fast; free-text queries are usually dominated by intent-extraction latency.
+The existing [architecture notes](docs/ARCHITECTURE.md) record measurements from an internal 15,255-film demo corpus. That corpus is not distributed with this repository, and those measurements are not a benchmark guarantee. Free-text latency depends on the selected intent-extraction backend.
 
 ---
 
 ## What this could enable next
 
-The point of this repository is larger than movie search. It demonstrates that an application can operate on a structured **experience state** rather than only on literal text.
+The point of this repository is larger than movie search. It demonstrates an application built around structured **experience preferences**: intent, affective tags, context and explicit constraints.
 
 The same design direction can be explored for:
 
@@ -214,7 +236,29 @@ These are **research directions**, not claims that this repository already imple
 **The Experience Semantic Protocol — A North Star for Post-Linguistic Communication**
 
 - DOI: **[10.5281/zenodo.20024213](https://doi.org/10.5281/zenodo.20024213)**
+- Author: **Damir Đulović** · Version **7** · Published **4 May 2026**
 - Record: **[Zenodo 20024213](https://zenodo.org/records/20024213)**
+- Paper license: **CC BY 4.0**, as recorded on Zenodo. The software has its own [proprietary license](LICENSE).
+
+The paper proposes **Typed Approximately Orthogonal Semantic Subspaces (TAOSS)**, a wire format and consent capabilities for selectively sharing representations of experience. It identifies proven results, conjectures and falsifiable research hypotheses separately. The six types are an engineering proposal; their separation and usefulness across domains remain research questions.
+
+### Cite and discuss the research
+
+Use GitHub’s **Cite this repository** action or copy this paper citation:
+
+```bibtex
+@misc{dulovic2026esp,
+  author    = {Đulović, Damir},
+  title     = {The Experience Semantic Protocol — A North Star for Post-Linguistic Communication},
+  year      = {2026},
+  publisher = {Zenodo},
+  version   = {7},
+  doi       = {10.5281/zenodo.20024213},
+  url       = {https://doi.org/10.5281/zenodo.20024213}
+}
+```
+
+Research questions, replication work and collaboration inquiries are welcome at **[info@vigilant-crs.de](mailto:info@vigilant-crs.de)**. When discussing the protocol, cite the paper; when describing engine behavior, also reference the repository and commit you examined.
 
 If you are researching semantic communication, multimodal interfaces, human-machine communication, experience representation, collective intelligence or future BCI protocols, the paper is the conceptual specification behind this implementation.
 

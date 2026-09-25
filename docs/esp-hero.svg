@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">Vigilant ESP — Find a feeling. Discover a film.</title>
+  <desc id="desc">Vigilant e.K.'s emotional movie search engine: human intent becomes typed preferences and ranked discovery. First media-search implementation in the Experience Semantic Protocol research program. Paper DOI 10.5281/zenodo.20024213.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0b1020"/><stop offset="1" stop-color="#111128"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#6554cf" stop-opacity=".3"/><stop offset="1" stop-color="#6554cf" stop-opacity="0"/></radialGradient>
+    <linearGradient id="accent"><stop stop-color="#78ede0"/><stop offset="1" stop-color="#b5a2ff"/></linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#c9d5ff" stroke-opacity=".035"/></pattern>
+  </defs>
+  <rect width="1280" height="640" rx="24" fill="url(#bg)"/>
+  <rect width="1280" height="640" rx="24" fill="url(#grid)"/>
+  <circle cx="995" cy="280" r="315" fill="url(#glow)"/>
+  <path d="M56 96H1224" stroke="#33384d"/>
+  <g font-family="DejaVu Sans,Segoe UI,Arial,sans-serif">
+    <path d="M58 40L73 68L88 40M73 68L100 40" fill="none" stroke="url(#accent)" stroke-width="4" stroke-linejoin="round"/>
+    <text x="117" y="62" font-size="21" letter-spacing="2.5" font-weight="700" fill="#f3f4ff">VIGILANT ESP</text>
+    <text x="1224" y="61" text-anchor="end" font-size="15" fill="#a4acc9">Vigilant e.K. / Research → Product</text>
+    <rect x="56" y="132" width="294" height="30" rx="15" fill="#172b31" stroke="#345453"/>
+    <circle cx="74" cy="147" r="4" fill="#78ede0"/>
+    <text x="88" y="152" font-size="12" letter-spacing="1.7" fill="#97f2e5">EXPERIENCE SEMANTIC PROTOCOL</text>
+    <text x="52" y="244" font-size="66" letter-spacing="-2.8" font-weight="700" fill="#f4f5ff">Find a feeling.</text>
+    <text x="52" y="324" font-size="66" letter-spacing="-2.8" font-weight="700" fill="url(#accent)">Discover a film.</text>
+    <text x="56" y="371" font-size="20" fill="#bcc4dd">Turn what people want to experience</text>
+    <text x="56" y="402" font-size="20" fill="#bcc4dd">into search they can shape and understand.</text>
+    <text x="56" y="447" font-size="13" letter-spacing="1.3" fill="#a4acc9">TYPED INTENT · EMOTIONAL DISCOVERY · VISIBLE MATCH REASONS</text>
+    <g stroke="#555778" fill="none">
+      <circle cx="1007" cy="285" r="142" stroke-dasharray="3 9"/>
+      <ellipse cx="1007" cy="285" rx="194" ry="75" transform="rotate(-32 1007 285)"/>
+      <ellipse cx="1007" cy="285" rx="194" ry="75" transform="rotate(32 1007 285)"/>
+      <path d="M860 199L1007 285L1160 214M860 365L1007 285L1160 365" stroke="#8581b9" stroke-opacity=".45"/>
+    </g>
+    <circle cx="1007" cy="285" r="70" fill="#151932" stroke="url(#accent)" stroke-width="2"/>
+    <text x="1007" y="286" text-anchor="middle" font-size="34" font-weight="700" letter-spacing="3" fill="#eff4ff">ESP</text>
+    <text x="1007" y="311" text-anchor="middle" font-size="11" letter-spacing="2" fill="#a8b7d3">PREFERENCES</text>
+    <g font-size="12" font-weight="700" letter-spacing="1">
+      <rect x="824" y="180" width="76" height="36" rx="18" fill="#123634" stroke="#4aa79d"/>
+      <text x="862" y="203" text-anchor="middle" fill="#94f2df">INTENT</text>
+      <rect x="1108" y="194" width="104" height="36" rx="18" fill="#33243c" stroke="#b77ba1"/>
+      <text x="1160" y="217" text-anchor="middle" fill="#f1bada">EMOTION</text>
+      <rect x="812" y="348" width="98" height="36" rx="18" fill="#29213e" stroke="#9a85ce"/>
+      <text x="861" y="371" text-anchor="middle" fill="#cfbaff">CONTEXT</text>
+      <rect x="1108" y="348" width="106" height="36" rx="18" fill="#242b3c" stroke="#8598c0"/>
+      <text x="1161" y="371" text-anchor="middle" fill="#c0d5fa">CONTENT</text>
+    </g>
+    <circle cx="1007" cy="143" r="5" fill="#b5a2ff"/>
+    <circle cx="1007" cy="427" r="5" fill="#78ede0"/>
+    <path d="M56 490H1224" stroke="#33384d"/>
+    <text x="56" y="533" font-size="13" fill="#78ede0">01</text>
+    <text x="87" y="533" font-size="17" fill="#e3e8f7">Human intent</text>
+    <path d="M285 527H340M334 521L340 527L334 533" fill="none" stroke="#6f7996"/>
+    <text x="405" y="533" font-size="13" fill="#9aceec">02</text>
+    <text x="436" y="533" font-size="17" fill="#e3e8f7">Typed preferences</text>
+    <path d="M671 527H726M720 521L726 527L720 533" fill="none" stroke="#6f7996"/>
+    <text x="790" y="533" font-size="13" fill="#c0aeff">03</text>
+    <text x="821" y="533" font-size="17" fill="#e3e8f7">Ranked discovery</text>
+    <text x="56" y="593" font-size="13" fill="#9aa7c6">FIRST MEDIA-SEARCH IMPLEMENTATION IN THE ESP RESEARCH PROGRAM</text>
+    <text x="1224" y="593" text-anchor="end" font-size="13" fill="#b5a2ff">PAPER / 10.5281/zenodo.20024213</text>
+  </g>
+</svg>

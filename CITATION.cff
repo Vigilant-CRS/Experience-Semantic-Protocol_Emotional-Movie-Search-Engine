@@ -1,22 +1,31 @@
 cff-version: 1.2.0
-message: "If you use or discuss Vigilant ESP, please cite the Experience Semantic Protocol paper and reference this software repository."
-title: "Vigilant ESP — Experience Semantic Protocol Reference Implementation"
+message: "Please cite the ESP paper below when discussing the research, and reference this repository and commit for the software implementation."
+title: "Vigilant ESP — Emotional Movie Search Engine"
 type: software
 authors:
-  - family-names: "Dulovic"
+  - family-names: "Đulović"
     given-names: "Damir"
-year: 2026
-license: "LicenseRef-Proprietary"
+    affiliation: "Vigilant e.K."
+license-url: "https://github.com/Vigilant-CRS/Experience-Semantic-Protocol_Emotional-Movie-Search-Engine/blob/main/LICENSE"
 repository-code: "https://github.com/Vigilant-CRS/Experience-Semantic-Protocol_Emotional-Movie-Search-Engine"
 contact:
   - name: "Vigilant e.K."
     email: "info@vigilant-crs.de"
-references:
-  - type: article
-    title: "The Experience Semantic Protocol — A North Star for Post-Linguistic Communication"
-    authors:
-      - family-names: "Dulovic"
-        given-names: "Damir"
-    year: 2026
-    doi: "10.5281/zenodo.20024213"
-    url: "https://doi.org/10.5281/zenodo.20024213"
+keywords:
+  - Experience Semantic Protocol
+  - emotional movie search
+  - semantic retrieval
+  - TAOSS
+preferred-citation:
+  type: report
+  title: "The Experience Semantic Protocol — A North Star for Post-Linguistic Communication"
+  authors:
+    - family-names: "Đulović"
+      given-names: "Damir"
+  year: 2026
+  month: 5
+  version: "7"
+  publisher:
+    name: "Zenodo"
+  doi: "10.5281/zenodo.20024213"
+  url: "https://doi.org/10.5281/zenodo.20024213"
