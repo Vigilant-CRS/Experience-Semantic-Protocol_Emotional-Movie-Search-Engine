@@ -1,5 +1,5 @@
 """
-Copyright (c) 2026 Damir Dulovic. All rights reserved.
+Copyright (c) 2026 Vigilant e.K. All rights reserved.
 Licensed under the Vigilant ESP Proprietary Software License (see LICENSE).
 Minimal-invasive enrichment: ergänze fehlende `color_palette` (weighted dict)
 und `protagonist_age` (single string) Felder in movies_dna_v3.jsonl, ohne
