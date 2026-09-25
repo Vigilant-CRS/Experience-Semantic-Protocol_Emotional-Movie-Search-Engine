@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+<title id="title">Experience Semantic Protocol typed semantic spaces</title>
+<desc id="desc">ESP represents experience as typed semantic spaces for knowledge, intention, emotion, context, sensory and temporal information.</desc>
+<rect width="1200" height="420" rx="28" fill="#0d1117"/>
+<text x="60" y="72" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="32" font-weight="700" fill="#f0f6fc">Experience Semantic Protocol</text>
+<text x="60" y="108" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" fill="#8b949e">Meaning as typed semantic state — language becomes an interface, not the only carrier.</text>
+<g font-family="Inter,Segoe UI,Arial,sans-serif">
+  <rect x="60" y="150" width="160" height="110" rx="18" fill="#161b22" stroke="#58a6ff" stroke-width="2"/>
+  <text x="140" y="192" text-anchor="middle" font-size="24" font-weight="700" fill="#58a6ff">KNO</text>
+  <text x="140" y="225" text-anchor="middle" font-size="16" fill="#c9d1d9">Knowledge</text>
+  <rect x="244" y="150" width="160" height="110" rx="18" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+  <text x="324" y="192" text-anchor="middle" font-size="24" font-weight="700" fill="#3fb950">INT</text>
+  <text x="324" y="225" text-anchor="middle" font-size="16" fill="#c9d1d9">Intention</text>
+  <rect x="428" y="150" width="160" height="110" rx="18" fill="#161b22" stroke="#f778ba" stroke-width="2"/>
+  <text x="508" y="192" text-anchor="middle" font-size="24" font-weight="700" fill="#f778ba">EMO</text>
+  <text x="508" y="225" text-anchor="middle" font-size="16" fill="#c9d1d9">Emotion</text>
+  <rect x="612" y="150" width="160" height="110" rx="18" fill="#161b22" stroke="#d29922" stroke-width="2"/>
+  <text x="692" y="192" text-anchor="middle" font-size="24" font-weight="700" fill="#d29922">CTX</text>
+  <text x="692" y="225" text-anchor="middle" font-size="16" fill="#c9d1d9">Context</text>
+  <rect x="796" y="150" width="160" height="110" rx="18" fill="#161b22" stroke="#a371f7" stroke-width="2"/>
+  <text x="876" y="192" text-anchor="middle" font-size="24" font-weight="700" fill="#a371f7">SEN</text>
+  <text x="876" y="225" text-anchor="middle" font-size="16" fill="#c9d1d9">Sensory</text>
+  <rect x="980" y="150" width="160" height="110" rx="18" fill="#161b22" stroke="#39c5cf" stroke-width="2"/>
+  <text x="1060" y="192" text-anchor="middle" font-size="24" font-weight="700" fill="#39c5cf">TEM</text>
+  <text x="1060" y="225" text-anchor="middle" font-size="16" fill="#c9d1d9">Temporal</text>
+</g>
+<path d="M150 310 H1050" stroke="#30363d" stroke-width="3"/>
+<circle cx="150" cy="310" r="7" fill="#58a6ff"/><circle cx="1050" cy="310" r="7" fill="#39c5cf"/>
+<text x="600" y="347" text-anchor="middle" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17" fill="#8b949e">selective representation • consent boundaries • machine-readable transfer • optional rendering into text / media / action</text>
+</svg>
