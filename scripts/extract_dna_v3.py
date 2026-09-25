@@ -1,6 +1,6 @@
 """
-Copyright (c) 2026 Damir Dulovic. All rights reserved.
-Licensed under the MindRead Proprietary Software License (see LICENSE).
+Copyright (c) 2026 Vigilant e.K. All rights reserved.
+Licensed under the Vigilant ESP Proprietary Software License (see LICENSE).
 
 DNA-Extractor V3 — extracts ontology-v3 DNA per film via OpenAI Chat API.
 
