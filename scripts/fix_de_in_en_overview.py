@@ -1,5 +1,5 @@
 """
-Copyright (c) 2026 Damir Dulovic. All rights reserved.
+Copyright (c) 2026 Vigilant e.K. All rights reserved.
 Licensed under the Vigilant ESP Proprietary Software License (see LICENSE).
 Detect films where the English `overview` field contains German text
 (common-words + umlauts heuristic), pull fresh English overview from
