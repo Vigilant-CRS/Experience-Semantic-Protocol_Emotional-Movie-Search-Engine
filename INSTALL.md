@@ -271,7 +271,7 @@ backwards-compatible — your indexed films remain searchable.
 
 License: see [`LICENSE`](LICENSE) (proprietary, commercial).
 
-Bug reports & support tickets: dulovic.damir@gmail.com — include
+Bug reports & support tickets: info@vigilant-crs.de — include
 `/api/health` output + relevant logs.
 
 Architecture overview: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
