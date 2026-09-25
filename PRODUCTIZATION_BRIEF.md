@@ -251,7 +251,7 @@ Für ein Pilot-Deployment (Catalog ≤ 50 K) in ~2 Tagen:
 
 | Tier | Reaction | Kontakt | Pro Jahr |
 |---|---|---|---|
-| **Bronze** | 5 Werktage E-Mail | dulovic.damir@gmail.com | inkl. License |
+| **Bronze** | 5 Werktage E-Mail | info@vigilant-crs.de | inkl. License |
 | **Silver** | 2 Werktage E-Mail + Slack | dediziertes Slack | +15 % License |
 | **Gold** | 4 h Business Hours (CET) | Slack + Phone | +30 % License |
 | **Platinum** | 1 h Critical (24/7) + monatliches Architecture-Review | direct line | +50 % License |
