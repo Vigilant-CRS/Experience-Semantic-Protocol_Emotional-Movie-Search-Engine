@@ -1,5 +1,5 @@
 """
-Copyright (c) 2026 Damir Dulovic. All rights reserved.
+Copyright (c) 2026 Vigilant e.K. All rights reserved.
 Licensed under the Vigilant ESP Proprietary Software License (see LICENSE).
 Direct payload-only update für Qdrant: liest die enrichten JSONL-Records
 und schreibt NUR die neuen Felder `color_palette` + `protagonist_age` per
