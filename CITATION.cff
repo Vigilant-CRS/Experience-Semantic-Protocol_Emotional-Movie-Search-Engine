@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use or discuss Vigilant ESP, please cite the Experience Semantic Protocol paper and reference this software repository."
+title: "Vigilant ESP — Experience Semantic Protocol Reference Implementation"
+type: software
+authors:
+  - family-names: "Dulovic"
+    given-names: "Damir"
+publisher: "Vigilant e.K."
+year: 2026
+license: "proprietary"
+repository-code: "https://github.com/Vigilant-CRS/Experience-Semantic-Protocol_Emotional-Movie-Search-Engine"
+contact:
+  - name: "Vigilant e.K."
+    email: "info@vigilant-crs.de"
+references:
+  - type: article
+    title: "The Experience Semantic Protocol — A North Star for Post-Linguistic Communication"
+    authors:
+      - family-names: "Dulovic"
+        given-names: "Damir"
+    year: 2026
+    doi: "10.5281/zenodo.20024213"
+    url: "https://doi.org/10.5281/zenodo.20024213"
