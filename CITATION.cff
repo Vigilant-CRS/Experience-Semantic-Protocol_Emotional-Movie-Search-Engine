@@ -5,9 +5,8 @@ type: software
 authors:
   - family-names: "Dulovic"
     given-names: "Damir"
-publisher: "Vigilant e.K."
 year: 2026
-license: "proprietary"
+license: "LicenseRef-Proprietary"
 repository-code: "https://github.com/Vigilant-CRS/Experience-Semantic-Protocol_Emotional-Movie-Search-Engine"
 contact:
   - name: "Vigilant e.K."
