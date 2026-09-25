@@ -1,6 +1,6 @@
 """
-Copyright (c) 2026 Damir Dulovic. All rights reserved.
-Licensed under the MindRead Proprietary Software License (see LICENSE).
+Copyright (c) 2026 Vigilant e.K. All rights reserved.
+Licensed under the Vigilant ESP Proprietary Software License (see LICENSE).
 
 Re-Indexer V3 — builds new Qdrant collection mindread_v3 from
   - movies_export.json   (metadata + overview/keywords)
