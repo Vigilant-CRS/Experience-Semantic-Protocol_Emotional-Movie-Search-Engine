@@ -1,6 +1,6 @@
 """
-Copyright (c) 2026 Damir Dulovic. All rights reserved.
-Licensed under the MindRead Proprietary Software License (see LICENSE).
+Copyright (c) 2026 Vigilant e.K. All rights reserved.
+Licensed under the Vigilant ESP Proprietary Software License (see LICENSE).
 Third-party components used by this file are listed in THIRD_PARTY_NOTICES.md.
 
 MindRead V3 API — schlanker Endpoint auf der V3-Pipeline.
